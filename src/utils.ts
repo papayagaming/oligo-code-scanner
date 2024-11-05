@@ -1,6 +1,7 @@
 import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import * as cache from '@actions/tool-cache'
+import * as github from '@actions/github'
 
 import stream from 'stream'
 const GRYPE_VERSION = 'v0.79.1'
@@ -466,9 +467,8 @@ function generateNpmDiff(
   location: string
 ): string {
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-    "version": "${currentVersion}"`,
     `+    "version": "${fixVersion}"`,
     '```'
@@ -482,9 +482,8 @@ function generatePipDiff(
 ): string {
   const packageName = location.split('/').pop()?.split('==')[0] || 'package'
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-${packageName}==${currentVersion}`,
     `+${packageName}==${fixVersion}`,
     '```'
@@ -497,9 +496,8 @@ function generateMavenDiff(
   location: string
 ): string {
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-        <version>${currentVersion}</version>`,
     `+        <version>${fixVersion}</version>`,
     '```'
@@ -512,9 +510,8 @@ function generateGradleDiff(
   location: string
 ): string {
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-    implementation "group:name:${currentVersion}"`,
     `+    implementation "group:name:${fixVersion}"`,
     '```'
@@ -527,9 +524,8 @@ function generateCargoDiff(
   location: string
 ): string {
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-version = "${currentVersion}"`,
     `+version = "${fixVersion}"`,
     '```'
@@ -542,9 +538,8 @@ function generateBundlerDiff(
   location: string
 ): string {
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-gem 'package', '${currentVersion}'`,
     `+gem 'package', '${fixVersion}'`,
     '```'
@@ -557,9 +552,8 @@ function generateGoDiff(
   location: string
 ): string {
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-require package v${currentVersion}`,
     `+require package v${fixVersion}`,
     '```'
@@ -572,9 +566,8 @@ function generateGenericDiff(
   location: string
 ): string {
   return [
+    `[**${location}**](${getRelativeFileLink(location)})`,
     '```diff',
-    `--- ${location}`,
-    `+++ ${location}`,
     `-version: ${currentVersion}`,
     `+version: ${fixVersion}`,
     '```'
@@ -771,4 +764,16 @@ function generateJsonReport(
   })
 
   return jsonReport
+}
+
+function getRelativeFileLink(location: string): string {
+  // Get the repository information from GitHub context
+  const context = github.context
+  const { owner, repo } = context.repo
+  const prNumber = context.payload.pull_request?.number
+
+  if (!prNumber) return location
+
+  // Create a link to the file in the PR
+  return `https://github.com/${owner}/${repo}/blob/${context.sha}/${location}`
 }
