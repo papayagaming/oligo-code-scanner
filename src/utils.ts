@@ -415,8 +415,8 @@ export async function runScan({
   })
 
   if (core.isDebug()) {
-    core.info('Grype output:')
-    core.info(cmdOutput)
+    core.debug('Grype output:')
+    core.debug(cmdOutput)
   }
 
   switch (outputFormat) {
@@ -430,9 +430,9 @@ export async function runScan({
       // const REPORT_FILE = "./results.json";
       // fs.writeFileSync(REPORT_FILE, );
       try {
-        core.info(`Parsing command output: ${cmdOutput}`)
+        core.debug(`Parsing command output: ${cmdOutput}`)
         const parsed = JSON.parse(cmdOutput)
-        core.info(`Parsed JSON structure: ${JSON.stringify(parsed)}`)
+        core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`)
         out.json = parsed.matches
         core.info(`Extracted matches: ${out.json?.length ?? 'undefined'} items`)
       } catch (error) {
