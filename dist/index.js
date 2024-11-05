@@ -34193,6 +34193,8 @@ var core = __nccwpck_require__(2186);
 var exec = __nccwpck_require__(1514);
 // EXTERNAL MODULE: ./node_modules/@actions/tool-cache/lib/tool-cache.js
 var tool_cache = __nccwpck_require__(7784);
+// EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
+var github = __nccwpck_require__(5438);
 // EXTERNAL MODULE: external "stream"
 var external_stream_ = __nccwpck_require__(2781);
 var external_stream_default = /*#__PURE__*/__nccwpck_require__.n(external_stream_);
@@ -34206,6 +34208,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
 
 
 
@@ -34521,9 +34524,8 @@ function generateVersionDiff(currentVersion, fixVersion, location) {
 }
 function generateNpmDiff(currentVersion, fixVersion, location) {
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-    "version": "${currentVersion}"`,
         `+    "version": "${fixVersion}"`,
         '```'
@@ -34533,9 +34535,8 @@ function generatePipDiff(currentVersion, fixVersion, location) {
     var _a;
     const packageName = ((_a = location.split('/').pop()) === null || _a === void 0 ? void 0 : _a.split('==')[0]) || 'package';
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-${packageName}==${currentVersion}`,
         `+${packageName}==${fixVersion}`,
         '```'
@@ -34543,9 +34544,8 @@ function generatePipDiff(currentVersion, fixVersion, location) {
 }
 function generateMavenDiff(currentVersion, fixVersion, location) {
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-        <version>${currentVersion}</version>`,
         `+        <version>${fixVersion}</version>`,
         '```'
@@ -34553,9 +34553,8 @@ function generateMavenDiff(currentVersion, fixVersion, location) {
 }
 function generateGradleDiff(currentVersion, fixVersion, location) {
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-    implementation "group:name:${currentVersion}"`,
         `+    implementation "group:name:${fixVersion}"`,
         '```'
@@ -34563,9 +34562,8 @@ function generateGradleDiff(currentVersion, fixVersion, location) {
 }
 function generateCargoDiff(currentVersion, fixVersion, location) {
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-version = "${currentVersion}"`,
         `+version = "${fixVersion}"`,
         '```'
@@ -34573,9 +34571,8 @@ function generateCargoDiff(currentVersion, fixVersion, location) {
 }
 function generateBundlerDiff(currentVersion, fixVersion, location) {
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-gem 'package', '${currentVersion}'`,
         `+gem 'package', '${fixVersion}'`,
         '```'
@@ -34583,9 +34580,8 @@ function generateBundlerDiff(currentVersion, fixVersion, location) {
 }
 function generateGoDiff(currentVersion, fixVersion, location) {
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-require package v${currentVersion}`,
         `+require package v${fixVersion}`,
         '```'
@@ -34593,9 +34589,8 @@ function generateGoDiff(currentVersion, fixVersion, location) {
 }
 function generateGenericDiff(currentVersion, fixVersion, location) {
     return [
+        `[**${location}**](${getRelativeFileLink(location)})`,
         '```diff',
-        `--- ${location}`,
-        `+++ ${location}`,
         `-version: ${currentVersion}`,
         `+version: ${fixVersion}`,
         '```'
@@ -34755,9 +34750,18 @@ function generateJsonReport(groupedResults, headers) {
     });
     return jsonReport;
 }
+function getRelativeFileLink(location) {
+    var _a;
+    // Get the repository information from GitHub context
+    const context = github.context;
+    const { owner, repo } = context.repo;
+    const prNumber = (_a = context.payload.pull_request) === null || _a === void 0 ? void 0 : _a.number;
+    if (!prNumber)
+        return location;
+    // Create a link to the file in the PR
+    return `https://github.com/${owner}/${repo}/blob/${context.sha}/${location}`;
+}
 
-// EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
-var github = __nccwpck_require__(5438);
 ;// CONCATENATED MODULE: ./src/pr-comment.ts
 var pr_comment_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
