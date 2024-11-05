@@ -35422,7 +35422,14 @@ function createOrUpdatePRComment(markdown) {
             });
             const existingComment = comments.data.find((comment) => { var _a; return (_a = comment.body) === null || _a === void 0 ? void 0 : _a.includes(COMMENT_MARKER); });
             core.info(`Existing comment found: ${existingComment ? 'yes' : 'no'}`);
-            const commentBody = `${COMMENT_MARKER}\n## Vulnerability Scan Results\n\n${markdown}`;
+            const commentBody = `${COMMENT_MARKER}
+## Vulnerability Scan Results
+
+The following vulnerabilities were found in your dependencies:
+
+${markdown}
+
+`;
             if (existingComment) {
                 core.info(`Updating existing comment ID: ${existingComment.id}`);
                 yield octokit.rest.issues.updateComment({
@@ -35480,7 +35487,7 @@ function run() {
             const severityCutoff = core.getInput('severity-cutoff') || 'medium';
             const onlyFixed = core.getInput('only-fixed') || 'false';
             const headers = core.getInput('headers') ||
-                'CVE,Package Name,Package Version,Ecosystem,Package Manager,Location,Source,Severity,CVSS,Description,Best Fix';
+                'CVE,Package Name,Package Version,Ecosystem,Package Manager,Location,Source,Severity,CVSS,Description,Fix Versions,Best Fix';
             const addCpesIfNone = 'true';
             const byCve = 'true';
             const vex = '';
