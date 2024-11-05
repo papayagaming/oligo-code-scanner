@@ -78,6 +78,27 @@ interface GroupedVulnerability {
   cvssScores: string[]
   descriptions: string[]
   fixVersions: string[]
+  bestFixVersion?: string
+}
+
+function findBestFixVersion(versions: string[]): string | undefined {
+  if (!versions.length) return undefined;
+  
+  // Remove duplicates
+  const uniqueVersions = Array.from(new Set(versions));
+  
+  // Sort versions in descending order (assuming semantic versioning)
+  return uniqueVersions.sort((a, b) => {
+    const aParts = a.split('.').map(p => parseInt(p.replace(/[^0-9]/g, ''), 10));
+    const bParts = b.split('.').map(p => parseInt(p.replace(/[^0-9]/g, ''), 10));
+    
+    for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+      const aVal = aParts[i] || 0;
+      const bVal = bParts[i] || 0;
+      if (aVal !== bVal) return bVal - aVal;
+    }
+    return 0;
+  })[0];
 }
 
 function groupVulnerabilities(
@@ -134,6 +155,11 @@ function groupVulnerabilities(
     }
   })
 
+  // Calculate best fix version for each group
+  for (const group of groupedMap.values()) {
+    group.bestFixVersion = findBestFixVersion(group.fixVersions);
+  }
+
   return Array.from(groupedMap.values())
 }
 
@@ -160,7 +186,8 @@ export function mapToReport(
     'Fix Versions': (r: GroupedVulnerability) => {
       const versions = Array.from(new Set(r.fixVersions))
       return versions.length ? versions.join(', ') : undefined
-    }
+    },
+    'Best Fix': (r: GroupedVulnerability) => r.bestFixVersion || 'No fix available'
   }
 
   return groupedResults.map(result => {
