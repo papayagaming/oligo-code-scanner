@@ -34995,7 +34995,12 @@ function mapToReport(results, headers) {
         Source: (r) => r.sources.join(', '),
         Severity: (r) => Array.from(new Set(r.severity)).join(', '),
         CVSS: (r) => Array.from(new Set(r.cvssScores)).join(', '),
-        Description: (r) => r.descriptions.join('\n\n'),
+        Description: (r) => {
+            const descriptions = Array.from(new Set(r.descriptions));
+            if (descriptions.length === 0)
+                return undefined;
+            return `<details><summary>Click to view</summary><p>${descriptions.join('<br><br>')}</p></details>`;
+        },
         'Fix Versions': (r) => {
             const versions = Array.from(new Set(r.fixVersions));
             return versions.length ? versions.join(', ') : undefined;
@@ -35006,8 +35011,10 @@ function mapToReport(results, headers) {
         const reportEntry = {};
         headerList.forEach(header => {
             if (header in allFields) {
-                reportEntry[header] =
-                    allFields[header](result);
+                const value = allFields[header](result);
+                if (value !== undefined) {
+                    reportEntry[header] = value;
+                }
             }
         });
         return reportEntry;
@@ -35428,7 +35435,6 @@ function createOrUpdatePRComment(markdown) {
 The following vulnerabilities were found in your dependencies:
 
 ${markdown}
-
 `;
             if (existingComment) {
                 core.info(`Updating existing comment ID: ${existingComment.id}`);

@@ -185,7 +185,9 @@ export function mapToReport(
     Description: (r: GroupedVulnerability) => {
       const descriptions = Array.from(new Set(r.descriptions))
       if (descriptions.length === 0) return undefined
-      return `<details><summary>Click to view</summary><p>${descriptions.join('<br><br>')}</p></details>`
+      return `<details><summary>Click to view</summary><p>${descriptions.join(
+        '<br><br>'
+      )}</p></details>`
     },
     'Fix Versions': (r: GroupedVulnerability) => {
       const versions = Array.from(new Set(r.fixVersions))
