@@ -470,14 +470,65 @@ export async function runScan({
       break
     }
     case 'json': {
-      // const REPORT_FILE = "./results.json";
-      // fs.writeFileSync(REPORT_FILE, );
       try {
         core.debug(`Parsing command output: ${cmdOutput}`)
         const parsed = JSON.parse(cmdOutput)
         core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`)
-        out.json = parsed.matches
-        core.info(`Extracted matches: ${out.json?.length ?? 'undefined'} items`)
+
+        // Grype outputs matches in an array
+        if (Array.isArray(parsed.matches)) {
+          // Enrich findings with third-party vulnerability data
+          out.json = await Promise.all(
+            parsed.matches.map(
+              async (match: {
+                vulnerability: {
+                  id: string
+                  fix: { versions: any }
+                  description: any
+                }
+              }) => {
+                try {
+                  // Check NVD database for additional fix information
+                  const nvdData = await fetchNVDData(match.vulnerability.id)
+                  if (nvdData) {
+                    match.vulnerability.fix = {
+                      ...match.vulnerability.fix,
+                      versions: [
+                        ...(match.vulnerability.fix?.versions || []),
+                        ...nvdData.fixVersions
+                      ]
+                    }
+                    match.vulnerability.description =
+                      nvdData.description || match.vulnerability.description
+                  }
+
+                  // Check GitHub Advisory Database
+                  const ghsaData = await fetchGitHubSecurityAdvisory(
+                    match.vulnerability.id
+                  )
+                  if (ghsaData) {
+                    match.vulnerability.fix = {
+                      ...match.vulnerability.fix,
+                      versions: [
+                        ...(match.vulnerability.fix?.versions || []),
+                        ...ghsaData.fixVersions
+                      ]
+                    }
+                  }
+
+                  return match
+                } catch (error) {
+                  core.debug(`Error enriching vulnerability data: ${error}`)
+                  return match
+                }
+              }
+            )
+          )
+        } else {
+          out.json = []
+        }
+
+        core.info(`Extracted and enriched matches: ${out.json.length} items`)
       } catch (error) {
         core.info(`Error parsing JSON output: ${error}`)
         out.json = []
@@ -946,4 +997,130 @@ function findParentPackage(
     core.debug(`Error finding parent package: ${error}`)
     return undefined
   }
+}
+
+interface NVDData {
+  fixVersions: string[]
+  description?: string
+}
+
+async function fetchNVDData(cveId: string): Promise<NVDData | null> {
+  try {
+    const apiKey = process.env.NVD_API_KEY
+    const baseUrl = 'https://services.nvd.nist.gov/rest/json/cves/2.0'
+
+    const response = await fetch(`${baseUrl}?cveId=${cveId}`, {
+      headers: apiKey
+        ? {
+            apiKey: apiKey
+          }
+        : {}
+    })
+
+    if (!response.ok) {
+      throw new Error(`NVD API responded with status ${response.status}`)
+    }
+
+    const data = await response.json()
+    const cveData = data.vulnerabilities?.[0]?.cve
+
+    if (!cveData) {
+      return null
+    }
+
+    return {
+      fixVersions: extractFixVersions(cveData),
+      description: cveData.descriptions?.[0]?.value
+    }
+  } catch (error) {
+    core.debug(`Error fetching NVD data: ${error}`)
+    return null
+  }
+}
+
+interface GitHubSecurityAdvisoryResponse {
+  securityVulnerabilities: {
+    nodes: Array<{
+      vulnerableVersionRange: string
+      firstPatchedVersion: {
+        identifier: string
+      } | null
+    }>
+  }
+}
+
+async function fetchGitHubSecurityAdvisory(
+  cveId: string
+): Promise<{ fixVersions: string[] } | null> {
+  try {
+    const token = process.env.GITHUB_TOKEN
+    if (!token) return null
+
+    const octokit = github.getOctokit(token)
+
+    const query = `
+      query($cveId: String!) {
+        securityVulnerabilities(first: 1, where: {cveId: $cveId}) {
+          nodes {
+            vulnerableVersionRange
+            firstPatchedVersion {
+              identifier
+            }
+          }
+        }
+      }
+    `
+
+    const result = await octokit.graphql<GitHubSecurityAdvisoryResponse>(
+      query,
+      { cveId }
+    )
+    const advisory = result.securityVulnerabilities.nodes[0]
+
+    if (!advisory) return null
+
+    return {
+      fixVersions: advisory.firstPatchedVersion
+        ? [advisory.firstPatchedVersion.identifier]
+        : []
+    }
+  } catch (error) {
+    core.debug(`Error fetching GitHub Security Advisory data: ${error}`)
+    return null
+  }
+}
+
+function extractFixVersions(cveData: any): string[] {
+  const fixVersions: string[] = []
+
+  // Extract from configurations if available
+  if (cveData.configurations) {
+    cveData.configurations.forEach((config: any) => {
+      if (config.nodes) {
+        config.nodes.forEach((node: any) => {
+          if (node.cpeMatch) {
+            node.cpeMatch.forEach((match: any) => {
+              if (match.versionEndExcluding) {
+                fixVersions.push(match.versionEndExcluding)
+              }
+              if (match.versionStartIncluding) {
+                fixVersions.push(match.versionStartIncluding)
+              }
+            })
+          }
+        })
+      }
+    })
+  }
+
+  // Extract from fixes if available
+  if (cveData.fixes) {
+    cveData.fixes.forEach((fix: any) => {
+      if (fix.versions) {
+        fixVersions.push(...fix.versions)
+      }
+    })
+  }
+
+  return Array.from(new Set(fixVersions))
 }

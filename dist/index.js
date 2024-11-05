@@ -34431,7 +34431,6 @@ function sourceInput() {
  * Wait for a number of milliseconds. Resolves with 'done!' after the wait time.
  */
 function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, addCpesIfNone, byCve, vex }) {
-    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
         const out = {};
         const env = Object.assign(Object.assign({}, process.env), { GRYPE_CHECK_FOR_APP_UPDATE: 'true' });
@@ -34523,14 +34522,46 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
                 break;
             }
             case 'json': {
-                // const REPORT_FILE = "./results.json";
-                // fs.writeFileSync(REPORT_FILE, );
                 try {
                     core.debug(`Parsing command output: ${cmdOutput}`);
                     const parsed = JSON.parse(cmdOutput);
                     core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`);
-                    out.json = parsed.matches;
-                    core.info(`Extracted matches: ${(_b = (_a = out.json) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 'undefined'} items`);
+                    // Grype outputs matches in an array
+                    if (Array.isArray(parsed.matches)) {
+                        // Enrich findings with third-party vulnerability data
+                        out.json = yield Promise.all(parsed.matches.map((match) => __awaiter(this, void 0, void 0, function* () {
+                            var _a, _b;
+                            try {
+                                // Check NVD database for additional fix information
+                                const nvdData = yield fetchNVDData(match.vulnerability.id);
+                                if (nvdData) {
+                                    match.vulnerability.fix = Object.assign(Object.assign({}, match.vulnerability.fix), { versions: [
+                                            ...(((_a = match.vulnerability.fix) === null || _a === void 0 ? void 0 : _a.versions) || []),
+                                            ...nvdData.fixVersions
+                                        ] });
+                                    match.vulnerability.description =
+                                        nvdData.description || match.vulnerability.description;
+                                }
+                                // Check GitHub Advisory Database
+                                const ghsaData = yield fetchGitHubSecurityAdvisory(match.vulnerability.id);
+                                if (ghsaData) {
+                                    match.vulnerability.fix = Object.assign(Object.assign({}, match.vulnerability.fix), { versions: [
+                                            ...(((_b = match.vulnerability.fix) === null || _b === void 0 ? void 0 : _b.versions) || []),
+                                            ...ghsaData.fixVersions
+                                        ] });
+                                }
+                                return match;
+                            }
+                            catch (error) {
+                                core.debug(`Error enriching vulnerability data: ${error}`);
+                                return match;
+                            }
+                        })));
+                    }
+                    else {
+                        out.json = [];
+                    }
+                    core.info(`Extracted and enriched matches: ${out.json.length} items`);
                 }
                 catch (error) {
                     core.info(`Error parsing JSON output: ${error}`);
@@ -34898,6 +34929,104 @@ function findParentPackage(packageName, location, type) {
         core.debug(`Error finding parent package: ${error}`);
         return undefined;
     }
+}
+function fetchNVDData(cveId) {
+    var _a, _b, _c, _d;
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const apiKey = process.env.NVD_API_KEY;
+            const baseUrl = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
+            const response = yield fetch(`${baseUrl}?cveId=${cveId}`, {
+                headers: apiKey
+                    ? {
+                        apiKey: apiKey
+                    }
+                    : {}
+            });
+            if (!response.ok) {
+                throw new Error(`NVD API responded with status ${response.status}`);
+            }
+            const data = yield response.json();
+            const cveData = (_b = (_a = data.vulnerabilities) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.cve;
+            if (!cveData) {
+                return null;
+            }
+            return {
+                fixVersions: extractFixVersions(cveData),
+                description: (_d = (_c = cveData.descriptions) === null || _c === void 0 ? void 0 : _c[0]) === null || _d === void 0 ? void 0 : _d.value
+            };
+        }
+        catch (error) {
+            core.debug(`Error fetching NVD data: ${error}`);
+            return null;
+        }
+    });
+}
+function fetchGitHubSecurityAdvisory(cveId) {
+    return __awaiter(this, void 0, void 0, function* () {
+        try {
+            const token = process.env.GITHUB_TOKEN;
+            if (!token)
+                return null;
+            const octokit = lib_github.getOctokit(token);
+            const query = `
+      query($cveId: String!) {
+        securityVulnerabilities(first: 1, where: {cveId: $cveId}) {
+          nodes {
+            vulnerableVersionRange
+            firstPatchedVersion {
+              identifier
+            }
+          }
+        }
+      }
+    `;
+            const result = yield octokit.graphql(query, { cveId });
+            const advisory = result.securityVulnerabilities.nodes[0];
+            if (!advisory)
+                return null;
+            return {
+                fixVersions: advisory.firstPatchedVersion
+                    ? [advisory.firstPatchedVersion.identifier]
+                    : []
+            };
+        }
+        catch (error) {
+            core.debug(`Error fetching GitHub Security Advisory data: ${error}`);
+            return null;
+        }
+    });
+}
+function extractFixVersions(cveData) {
+    const fixVersions = [];
+    // Extract from configurations if available
+    if (cveData.configurations) {
+        cveData.configurations.forEach((config) => {
+            if (config.nodes) {
+                config.nodes.forEach((node) => {
+                    if (node.cpeMatch) {
+                        node.cpeMatch.forEach((match) => {
+                            if (match.versionEndExcluding) {
+                                fixVersions.push(match.versionEndExcluding);
+                            }
+                            if (match.versionStartIncluding) {
+                                fixVersions.push(match.versionStartIncluding);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    }
+    // Extract from fixes if available
+    if (cveData.fixes) {
+        cveData.fixes.forEach((fix) => {
+            if (fix.versions) {
+                fixVersions.push(...fix.versions);
+            }
+        });
+    }
+    return Array.from(new Set(fixVersions));
 }
 
 ;// CONCATENATED MODULE: ./src/pr-comment.ts
