@@ -79,6 +79,9 @@ export async function run(): Promise<void> {
       }
     } else {
       const results = out.json
+      core.debug(`Scan results: ${JSON.stringify(results)}`)
+      core.debug(`Results type: ${typeof results}, is array: ${Array.isArray(results)}`)
+      core.debug(`Results length: ${results?.length}`)
 
       if (results) {
         core.info(`${results?.length} Vulnerabilities found`)

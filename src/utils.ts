@@ -316,8 +316,13 @@ export async function runScan({
       // const REPORT_FILE = "./results.json";
       // fs.writeFileSync(REPORT_FILE, );
       try {
-        out.json = JSON.parse(cmdOutput).matches
-      } catch {
+        core.debug(`Parsing command output: ${cmdOutput}`)
+        const parsed = JSON.parse(cmdOutput)
+        core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`)
+        out.json = parsed.matches
+        core.debug(`Extracted matches: ${out.json?.length ?? 'undefined'} items`)
+      } catch (error) {
+        core.debug(`Error parsing JSON output: ${error}`)
         out.json = []
       }
       break
