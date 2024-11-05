@@ -287,13 +287,13 @@ export async function runScan({
       ignoreReturnCode: true,
       outStream,
       listeners: {
-        stdout(buffer) {
+        stdout(buffer: { toString: () => string }) {
           cmdOutput += buffer.toString()
         },
-        stderr(buffer) {
+        stderr(buffer: { toString: () => string }) {
           core.info(buffer.toString())
         },
-        debug(message) {
+        debug(message: string) {
           core.debug(message)
         }
       }

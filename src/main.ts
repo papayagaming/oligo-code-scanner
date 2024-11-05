@@ -1,6 +1,7 @@
 import * as core from '@actions/core'
 import { getResultsDiff, runScan, sourceInput, mapToReport } from './utils'
 import tablemark from 'tablemark'
+import { createOrUpdatePRComment } from './pr-comment'
 
 /**
  * The main function for the action.
@@ -20,6 +21,7 @@ export async function run(): Promise<void> {
     const addCpesIfNone = 'true'
     const byCve = 'true'
     const vex = ''
+    const createPRComment = core.getInput('create-pr-comment') === 'true'
 
     const out = await runScan({
       source: sourceArray.head,
@@ -50,7 +52,12 @@ export async function run(): Promise<void> {
         if (results.length > 0) {
           const report = mapToReport(results, headers)
           core.setOutput('json', report)
-          core.setOutput('markdown', tablemark(report))
+          const reportTable = tablemark(report)
+          core.setOutput('markdown', reportTable)
+          core.info(`output : ${reportTable}`)
+          if (createPRComment && results.length > 0) {
+            await createOrUpdatePRComment(reportTable)
+          }
         } else {
           core.setOutput('json', [])
           core.setOutput('markdown', '')
@@ -76,6 +83,9 @@ export async function run(): Promise<void> {
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
           core.info(`output : ${reportTable}`)
+          if (createPRComment && results?.length > 0) {
+            await createOrUpdatePRComment(reportTable)
+          }
         }
       }
       if (failBuild === 'true' && results && results?.length > 0) {
