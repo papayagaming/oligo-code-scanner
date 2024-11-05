@@ -34606,10 +34606,11 @@ function generateVulnerabilityReport(groupedResults) {
     // Group by package name
     groupedResults.forEach(vuln => {
         var _a;
-        if (!packageGroups.has(vuln.packageName)) {
-            packageGroups.set(vuln.packageName, []);
+        const key = vuln.packageName;
+        if (!packageGroups.has(key)) {
+            packageGroups.set(key, []);
         }
-        (_a = packageGroups.get(vuln.packageName)) === null || _a === void 0 ? void 0 : _a.push(vuln);
+        (_a = packageGroups.get(key)) === null || _a === void 0 ? void 0 : _a.push(vuln);
     });
     const sections = [];
     // Generate markdown for each package
@@ -34617,49 +34618,82 @@ function generateVulnerabilityReport(groupedResults) {
         const firstVuln = vulns[0];
         const currentVersion = firstVuln.packageVersion;
         const bestFix = firstVuln.bestFixVersion;
-        const severities = new Set(vulns.flatMap(v => v.severity));
-        const highestSeverity = [
-            'critical',
-            'high',
-            'medium',
-            'low',
-            'negligible'
-        ].find(sev => severities.has(sev));
-        const section = [`### 📦 ${packageName}@${currentVersion}`];
-        // Add severity badge
-        const severityColor = {
-            critical: 'red',
-            high: 'orange',
-            medium: 'yellow',
-            low: 'blue',
-            negligible: 'gray'
-        }[highestSeverity || 'gray'];
-        section.push(`![${highestSeverity}](https://img.shields.io/badge/severity-${highestSeverity}-${severityColor})`);
-        // Add vulnerability details
-        section.push('\n#### 🔍 Vulnerabilities Found\n');
-        vulns.forEach(vuln => {
-            const cveList = vuln.cves
-                .map(cve => `[\`${cve}\`](https://nvd.nist.gov/vuln/detail/${cve})`)
-                .join(', ');
-            section.push(`<details>
-<summary><strong>${vuln.severity.join(', ')}</strong> - ${cveList}</summary>
-
-- **CVSS Scores**: ${vuln.cvssScores.join(', ')}
-- **Source**: ${vuln.sources.join(', ')}
-- **Description**: ${vuln.descriptions.join('\n')}
-</details>`);
+        // Get highest severity
+        const severityMap = {
+            critical: 5,
+            high: 4,
+            medium: 3,
+            low: 2,
+            negligible: 1
+        };
+        const severityColors = {
+            critical: 'cc0000',
+            high: 'ff4d4d',
+            medium: 'ff9900',
+            low: '99cc00',
+            negligible: '999999'
+        };
+        const highestSeverity = Array.from(new Set(vulns.flatMap(v => v.severity))).sort((a, b) => {
+            const aSeverity = severityMap[a.toLowerCase()] || 0;
+            const bSeverity = severityMap[b.toLowerCase()] || 0;
+            return bSeverity - aSeverity;
+        })[0];
+        const severityColor = severityColors[highestSeverity.toLowerCase()] || '999999';
+        const section = [
+            `### 📦 ${packageName}@${currentVersion}`,
+            '',
+            `![${highestSeverity}](https://img.shields.io/badge/severity-${highestSeverity}-${severityColor})`,
+            '',
+            '#### 🔍 Vulnerabilities',
+            ''
+        ];
+        // Group vulnerabilities by severity
+        const vulnsBySeverity = new Map();
+        vulns.forEach(v => {
+            var _a;
+            const sev = v.severity[0];
+            if (!vulnsBySeverity.has(sev)) {
+                vulnsBySeverity.set(sev, []);
+            }
+            (_a = vulnsBySeverity.get(sev)) === null || _a === void 0 ? void 0 : _a.push(v);
         });
+        // Add vulnerabilities grouped by severity
+        for (const [severity, sevVulns] of vulnsBySeverity) {
+            section.push(`<details ${severity.toLowerCase() === highestSeverity.toLowerCase() ? 'open' : ''}>`);
+            section.push(`<summary><strong>${severity}</strong> Vulnerabilities</summary>`);
+            section.push('');
+            sevVulns.forEach(vuln => {
+                const cveLinks = vuln.cves
+                    .map(cve => `[\`${cve}\`](https://nvd.nist.gov/vuln/detail/${cve})`)
+                    .join(' ');
+                section.push(`- **CVE**: ${cveLinks}`);
+                if (vuln.cvssScores.length) {
+                    section.push(`  - **CVSS**: ${vuln.cvssScores.join(', ')}`);
+                }
+                if (vuln.descriptions.length) {
+                    section.push(`  - **Description**: ${vuln.descriptions[0]}`);
+                }
+                section.push('');
+            });
+            section.push('</details>');
+            section.push('');
+        }
         // Add fix information
         if (bestFix) {
-            section.push('\n#### 🛠️ Recommended Fix\n');
-            section.push(`Upgrade to version \`${bestFix}\`\n`);
-            section.push('<details><summary>View upgrade diff</summary>\n');
+            section.push('#### 🛠️ Recommended Fix');
+            section.push('');
+            section.push(`Upgrade to version \`${bestFix}\``);
+            section.push('');
+            section.push('<details>');
+            section.push('<summary>📝 View upgrade diff</summary>');
+            section.push('');
             section.push(generateVersionDiff(currentVersion, bestFix, firstVuln.location));
             section.push('</details>');
         }
         else {
-            section.push('\n#### ⚠️ No Fix Available\n');
-            section.push('Consider reviewing this dependency for alternatives.');
+            section.push('#### ⚠️ No Fix Available');
+            section.push('');
+            section.push('> Consider reviewing this dependency for alternatives or implementing additional security controls.');
         }
         section.push('\n---\n');
         sections.push(section.join('\n'));
@@ -34668,7 +34702,11 @@ function generateVulnerabilityReport(groupedResults) {
 
 ${sections.join('\n')}
 
-> 💡 This report shows newly introduced vulnerabilities. Each package includes its severity, CVE details, and recommended fixes.`;
+> 💡 This report shows newly introduced vulnerabilities. Each package includes its severity, CVE details, and recommended fixes.
+> 
+> - 🔍 Click on CVE links to view detailed vulnerability information
+> - 📝 Expand sections to view more details
+> - 🛠️ Follow the recommended fixes to resolve vulnerabilities`;
 }
 function generateJsonReport(groupedResults, headers) {
     const headerFields = headers.split(',');

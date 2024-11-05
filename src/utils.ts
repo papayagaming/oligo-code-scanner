@@ -588,10 +588,11 @@ function generateVulnerabilityReport(
 
   // Group by package name
   groupedResults.forEach(vuln => {
-    if (!packageGroups.has(vuln.packageName)) {
-      packageGroups.set(vuln.packageName, [])
+    const key = vuln.packageName
+    if (!packageGroups.has(key)) {
+      packageGroups.set(key, [])
     }
-    packageGroups.get(vuln.packageName)?.push(vuln)
+    packageGroups.get(key)?.push(vuln)
   })
 
   const sections: string[] = []
@@ -602,57 +603,103 @@ function generateVulnerabilityReport(
     const currentVersion = firstVuln.packageVersion
     const bestFix = firstVuln.bestFixVersion
 
-    const severities = new Set(vulns.flatMap(v => v.severity))
-    const highestSeverity = [
-      'critical',
-      'high',
-      'medium',
-      'low',
-      'negligible'
-    ].find(sev => severities.has(sev))
+    // Get highest severity
+    const severityMap: Record<string, number> = {
+      critical: 5,
+      high: 4,
+      medium: 3,
+      low: 2,
+      negligible: 1
+    } as const
 
-    const section = [`### 📦 ${packageName}@${currentVersion}`]
+    const severityColors: Record<string, string> = {
+      critical: 'cc0000',
+      high: 'ff4d4d',
+      medium: 'ff9900',
+      low: '99cc00',
+      negligible: '999999'
+    } as const
 
-    // Add severity badge
-    const severityColor = {
-      critical: 'red',
-      high: 'orange',
-      medium: 'yellow',
-      low: 'blue',
-      negligible: 'gray'
-    }[highestSeverity || 'gray']
+    const highestSeverity = Array.from(
+      new Set(vulns.flatMap(v => v.severity))
+    ).sort((a, b) => {
+      const aSeverity = severityMap[a.toLowerCase()] || 0
+      const bSeverity = severityMap[b.toLowerCase()] || 0
+      return bSeverity - aSeverity
+    })[0]
 
-    section.push(
-      `![${highestSeverity}](https://img.shields.io/badge/severity-${highestSeverity}-${severityColor})`
-    )
+    const severityColor =
+      severityColors[highestSeverity.toLowerCase()] || '999999'
 
-    // Add vulnerability details
-    section.push('\n#### 🔍 Vulnerabilities Found\n')
-    vulns.forEach(vuln => {
-      const cveList = vuln.cves
-        .map(cve => `[\`${cve}\`](https://nvd.nist.gov/vuln/detail/${cve})`)
-        .join(', ')
-      section.push(`<details>
-<summary><strong>${vuln.severity.join(', ')}</strong> - ${cveList}</summary>
+    const section = [
+      `### 📦 ${packageName}@${currentVersion}`,
+      '',
+      `![${highestSeverity}](https://img.shields.io/badge/severity-${highestSeverity}-${severityColor})`,
+      '',
+      '#### 🔍 Vulnerabilities',
+      ''
+    ]
 
-- **CVSS Scores**: ${vuln.cvssScores.join(', ')}
-- **Source**: ${vuln.sources.join(', ')}
-- **Description**: ${vuln.descriptions.join('\n')}
-</details>`)
+    // Group vulnerabilities by severity
+    const vulnsBySeverity = new Map<string, GroupedVulnerability[]>()
+    vulns.forEach(v => {
+      const sev = v.severity[0]
+      if (!vulnsBySeverity.has(sev)) {
+        vulnsBySeverity.set(sev, [])
+      }
+      vulnsBySeverity.get(sev)?.push(v)
     })
+
+    // Add vulnerabilities grouped by severity
+    for (const [severity, sevVulns] of vulnsBySeverity) {
+      section.push(
+        `<details ${
+          severity.toLowerCase() === highestSeverity.toLowerCase() ? 'open' : ''
+        }>`
+      )
+      section.push(
+        `<summary><strong>${severity}</strong> Vulnerabilities</summary>`
+      )
+      section.push('')
+
+      sevVulns.forEach(vuln => {
+        const cveLinks = vuln.cves
+          .map(cve => `[\`${cve}\`](https://nvd.nist.gov/vuln/detail/${cve})`)
+          .join(' ')
+
+        section.push(`- **CVE**: ${cveLinks}`)
+        if (vuln.cvssScores.length) {
+          section.push(`  - **CVSS**: ${vuln.cvssScores.join(', ')}`)
+        }
+        if (vuln.descriptions.length) {
+          section.push(`  - **Description**: ${vuln.descriptions[0]}`)
+        }
+        section.push('')
+      })
+
+      section.push('</details>')
+      section.push('')
+    }
 
     // Add fix information
     if (bestFix) {
-      section.push('\n#### 🛠️ Recommended Fix\n')
-      section.push(`Upgrade to version \`${bestFix}\`\n`)
-      section.push('<details><summary>View upgrade diff</summary>\n')
+      section.push('#### 🛠️ Recommended Fix')
+      section.push('')
+      section.push(`Upgrade to version \`${bestFix}\``)
+      section.push('')
+      section.push('<details>')
+      section.push('<summary>📝 View upgrade diff</summary>')
+      section.push('')
       section.push(
         generateVersionDiff(currentVersion, bestFix, firstVuln.location)
       )
       section.push('</details>')
     } else {
-      section.push('\n#### ⚠️ No Fix Available\n')
-      section.push('Consider reviewing this dependency for alternatives.')
+      section.push('#### ⚠️ No Fix Available')
+      section.push('')
+      section.push(
+        '> Consider reviewing this dependency for alternatives or implementing additional security controls.'
+      )
     }
 
     section.push('\n---\n')
@@ -663,7 +710,11 @@ function generateVulnerabilityReport(
 
 ${sections.join('\n')}
 
-> 💡 This report shows newly introduced vulnerabilities. Each package includes its severity, CVE details, and recommended fixes.`
+> 💡 This report shows newly introduced vulnerabilities. Each package includes its severity, CVE details, and recommended fixes.
+> 
+> - 🔍 Click on CVE links to view detailed vulnerability information
+> - 📝 Expand sections to view more details
+> - 🛠️ Follow the recommended fixes to resolve vulnerabilities`
 }
 
 function generateJsonReport(
