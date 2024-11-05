@@ -436,7 +436,18 @@ function generateVersionDiff(
   const path = location.toLowerCase()
   let diffFormat: string
 
-  if (path.endsWith('package.json')) {
+  if (path.includes('package-lock.json')) {
+    // Change to look for package.json instead
+    const packageJsonPath = location.replace(
+      'package-lock.json',
+      'package.json'
+    )
+    diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath)
+  } else if (path.includes('yarn.lock')) {
+    // Change to look for package.json instead
+    const packageJsonPath = location.replace('yarn.lock', 'package.json')
+    diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath)
+  } else if (path.endsWith('package.json')) {
     diffFormat = generateNpmDiff(currentVersion, fixVersion, location)
   } else if (path.endsWith('requirements.txt')) {
     diffFormat = generatePipDiff(currentVersion, fixVersion, location)
@@ -454,7 +465,6 @@ function generateVersionDiff(
   } else if (path.endsWith('go.mod')) {
     diffFormat = generateGoDiff(currentVersion, fixVersion, location)
   } else {
-    // Default to generic version format
     diffFormat = generateGenericDiff(currentVersion, fixVersion, location)
   }
 
@@ -645,11 +655,7 @@ function generateVulnerabilityReport(
 
     // Add vulnerabilities grouped by severity
     for (const [severity, sevVulns] of vulnsBySeverity) {
-      section.push(
-        `<details ${
-          severity.toLowerCase() === highestSeverity.toLowerCase() ? 'open' : ''
-        }>`
-      )
+      section.push(`<details>`)
       section.push(
         `<summary><strong>${severity}</strong> Vulnerabilities</summary>`
       )
@@ -701,13 +707,18 @@ function generateVulnerabilityReport(
 
   return `# 🔒 Security Vulnerability Report
 
+<details>
+<summary><strong>📊 Vulnerability Details</strong></summary>
+
 ${sections.join('\n')}
 
 > 💡 This report shows newly introduced vulnerabilities. Each package includes its severity, CVE details, and recommended fixes.
 > 
 > - 🔍 Click on CVE links to view detailed vulnerability information
 > - 📝 Expand sections to view more details
-> - 🛠️ Follow the recommended fixes to resolve vulnerabilities`
+> - 🛠️ Follow the recommended fixes to resolve vulnerabilities
+
+</details>`
 }
 
 function generateJsonReport(
