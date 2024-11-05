@@ -32243,6 +32243,21 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ 875:
+/***/ ((module) => {
+
+function webpackEmptyContext(req) {
+	var e = new Error("Cannot find module '" + req + "'");
+	e.code = 'MODULE_NOT_FOUND';
+	throw e;
+}
+webpackEmptyContext.keys = () => ([]);
+webpackEmptyContext.resolve = webpackEmptyContext;
+webpackEmptyContext.id = 875;
+module.exports = webpackEmptyContext;
+
+/***/ }),
+
 /***/ 9491:
 /***/ ((module) => {
 
@@ -34248,14 +34263,39 @@ function findBestFixVersion(versions) {
 }
 function groupVulnerabilities(findings) {
     const groupedMap = new Map();
+    const dependencyTree = new Map();
+    // First pass: build dependency tree and collect all packages
     findings.forEach(finding => {
-        var _a, _b, _c;
+        var _a, _b, _c, _d, _e;
         const key = finding.artifact.name;
         const location = ((_a = finding.artifact.locations[0]) === null || _a === void 0 ? void 0 : _a.path) || 'unknown';
+        // Parse package.json to find parent package
+        let parentPackage;
+        if (location.includes('node_modules')) {
+            const parts = location.split('node_modules/');
+            const possibleParent = parts[0].match(/package\.json$/);
+            if (possibleParent) {
+                try {
+                    const packageJson = __nccwpck_require__(875)(parts[0]);
+                    if (((_b = packageJson.dependencies) === null || _b === void 0 ? void 0 : _b[key]) ||
+                        ((_c = packageJson.devDependencies) === null || _c === void 0 ? void 0 : _c[key])) {
+                        parentPackage = {
+                            name: packageJson.name,
+                            version: packageJson.version,
+                            location: parts[0]
+                        };
+                    }
+                }
+                catch (error) {
+                    // Ignore package.json parsing errors
+                }
+            }
+        }
         if (!groupedMap.has(key)) {
             groupedMap.set(key, {
                 packageName: finding.artifact.name,
                 packageVersion: finding.artifact.version,
+                parentPackage,
                 cves: [],
                 severity: [],
                 ecosystem: finding.artifact.type,
@@ -34272,11 +34312,11 @@ function groupVulnerabilities(findings) {
             group.severity.push(finding.vulnerability.severity);
             group.sources.push(finding.vulnerability.dataSource);
             group.descriptions.push(finding.vulnerability.description);
-            const cvssScore = (_b = finding.vulnerability.cvss) === null || _b === void 0 ? void 0 : _b.map(cvss => { var _a; return (_a = cvss.metrics) === null || _a === void 0 ? void 0 : _a.baseScore.toString(); }).filter(score => score).join(',');
+            const cvssScore = (_d = finding.vulnerability.cvss) === null || _d === void 0 ? void 0 : _d.map(cvss => { var _a; return (_a = cvss.metrics) === null || _a === void 0 ? void 0 : _a.baseScore.toString(); }).filter(score => score).join(',');
             if (cvssScore) {
                 group.cvssScores.push(cvssScore);
             }
-            if ((_c = finding.vulnerability.fix) === null || _c === void 0 ? void 0 : _c.versions.length) {
+            if ((_e = finding.vulnerability.fix) === null || _e === void 0 ? void 0 : _e.versions.length) {
                 group.fixVersions.push(...finding.vulnerability.fix.versions);
             }
         }
@@ -34490,44 +34530,55 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
         return out;
     });
 }
-function generateVersionDiff(currentVersion, fixVersion, location) {
-    // Detect package management system based on file path
-    const path = location.toLowerCase();
+function generateVersionDiff(currentVersion, fixVersion, location, parentPackage) {
+    // If we have a parent package, use its location instead
+    const targetLocation = (parentPackage === null || parentPackage === void 0 ? void 0 : parentPackage.location) || location;
+    const path = targetLocation.toLowerCase();
     let diffFormat;
-    if (path.includes('package-lock.json')) {
-        // Change to look for package.json instead
-        const packageJsonPath = location.replace('package-lock.json', 'package.json');
-        diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath);
-    }
-    else if (path.includes('yarn.lock')) {
-        // Change to look for package.json instead
-        const packageJsonPath = location.replace('yarn.lock', 'package.json');
-        diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath);
-    }
-    else if (path.endsWith('package.json')) {
-        diffFormat = generateNpmDiff(currentVersion, fixVersion, location);
-    }
-    else if (path.endsWith('requirements.txt')) {
-        diffFormat = generatePipDiff(currentVersion, fixVersion, location);
-    }
-    else if (path.endsWith('pom.xml')) {
-        diffFormat = generateMavenDiff(currentVersion, fixVersion, location);
-    }
-    else if (path.endsWith('build.gradle') ||
-        path.endsWith('build.gradle.kts')) {
-        diffFormat = generateGradleDiff(currentVersion, fixVersion, location);
-    }
-    else if (path.endsWith('cargo.toml')) {
-        diffFormat = generateCargoDiff(currentVersion, fixVersion, location);
-    }
-    else if (path.endsWith('gemfile')) {
-        diffFormat = generateBundlerDiff(currentVersion, fixVersion, location);
-    }
-    else if (path.endsWith('go.mod')) {
-        diffFormat = generateGoDiff(currentVersion, fixVersion, location);
+    if (parentPackage) {
+        // Generate diff for the parent package's dependency
+        diffFormat = [
+            `[**${targetLocation}**](${getRelativeFileLink(targetLocation)})`,
+            '```diff',
+            `-    "${parentPackage.name}": "${currentVersion}"`,
+            `+    "${parentPackage.name}": "${fixVersion}"`,
+            '```',
+            '',
+            '> ℹ️ This package is a dependency of ' + parentPackage.name
+        ].join('\n');
     }
     else {
-        diffFormat = generateGenericDiff(currentVersion, fixVersion, location);
+        // Use existing diff generation logic for direct dependencies
+        if (path.includes('package-lock.json')) {
+            const packageJsonPath = location.replace('package-lock.json', 'package.json');
+            diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath);
+        }
+        else if (path.includes('yarn.lock')) {
+            const packageJsonPath = location.replace('yarn.lock', 'package.json');
+            diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath);
+        }
+        else if (path.endsWith('package.json')) {
+            diffFormat = generateNpmDiff(currentVersion, fixVersion, location);
+        }
+        else if (path.endsWith('requirements.txt')) {
+            diffFormat = generatePipDiff(currentVersion, fixVersion, location);
+        }
+        else if (path.endsWith('pom.xml')) {
+            diffFormat = generateMavenDiff(currentVersion, fixVersion, location);
+        }
+        else if (path.endsWith('build.gradle') ||
+            path.endsWith('build.gradle.kts')) {
+            diffFormat = generateGradleDiff(currentVersion, fixVersion, location);
+        }
+        else if (path.endsWith('cargo.toml')) {
+            diffFormat = generateCargoDiff(currentVersion, fixVersion, location);
+        }
+        else if (path.endsWith('go.mod')) {
+            diffFormat = generateGoDiff(currentVersion, fixVersion, location);
+        }
+        else {
+            diffFormat = generateGenericDiff(currentVersion, fixVersion, location);
+        }
     }
     return diffFormat;
 }
@@ -34691,7 +34742,7 @@ function generateVulnerabilityReport(groupedResults) {
             section.push('<details>');
             section.push('<summary>📝 View upgrade diff</summary>');
             section.push('');
-            section.push(generateVersionDiff(currentVersion, bestFix, firstVuln.location));
+            section.push(generateVersionDiff(currentVersion, bestFix, firstVuln.location, firstVuln.parentPackage));
             section.push('</details>');
         }
         else {

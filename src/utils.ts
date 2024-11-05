@@ -69,6 +69,11 @@ export function getResultsDiff(
 interface GroupedVulnerability {
   packageName: string
   packageVersion: string
+  parentPackage?: {
+    name: string
+    version: string
+    location: string
+  }
   cves: string[]
   severity: string[]
   ecosystem: string
@@ -104,15 +109,44 @@ function groupVulnerabilities(
   findings: IGrypeFinding[]
 ): GroupedVulnerability[] {
   const groupedMap = new Map<string, GroupedVulnerability>()
+  const dependencyTree = new Map<string, Set<string>>()
 
+  // First pass: build dependency tree and collect all packages
   findings.forEach(finding => {
     const key = finding.artifact.name
     const location = finding.artifact.locations[0]?.path || 'unknown'
+
+    // Parse package.json to find parent package
+    let parentPackage:
+      | { name: string; version: string; location: string }
+      | undefined
+    if (location.includes('node_modules')) {
+      const parts = location.split('node_modules/')
+      const possibleParent = parts[0].match(/package\.json$/)
+      if (possibleParent) {
+        try {
+          const packageJson = require(parts[0])
+          if (
+            packageJson.dependencies?.[key] ||
+            packageJson.devDependencies?.[key]
+          ) {
+            parentPackage = {
+              name: packageJson.name,
+              version: packageJson.version,
+              location: parts[0]
+            }
+          }
+        } catch (error) {
+          // Ignore package.json parsing errors
+        }
+      }
+    }
 
     if (!groupedMap.has(key)) {
       groupedMap.set(key, {
         packageName: finding.artifact.name,
         packageVersion: finding.artifact.version,
+        parentPackage,
         cves: [],
         severity: [],
         ecosystem: finding.artifact.type,
@@ -430,42 +464,54 @@ export async function runScan({
 function generateVersionDiff(
   currentVersion: string,
   fixVersion: string,
-  location: string
+  location: string,
+  parentPackage?: { name: string; version: string; location: string }
 ): string {
-  // Detect package management system based on file path
-  const path = location.toLowerCase()
+  // If we have a parent package, use its location instead
+  const targetLocation = parentPackage?.location || location
+  const path = targetLocation.toLowerCase()
   let diffFormat: string
 
-  if (path.includes('package-lock.json')) {
-    // Change to look for package.json instead
-    const packageJsonPath = location.replace(
-      'package-lock.json',
-      'package.json'
-    )
-    diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath)
-  } else if (path.includes('yarn.lock')) {
-    // Change to look for package.json instead
-    const packageJsonPath = location.replace('yarn.lock', 'package.json')
-    diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath)
-  } else if (path.endsWith('package.json')) {
-    diffFormat = generateNpmDiff(currentVersion, fixVersion, location)
-  } else if (path.endsWith('requirements.txt')) {
-    diffFormat = generatePipDiff(currentVersion, fixVersion, location)
-  } else if (path.endsWith('pom.xml')) {
-    diffFormat = generateMavenDiff(currentVersion, fixVersion, location)
-  } else if (
-    path.endsWith('build.gradle') ||
-    path.endsWith('build.gradle.kts')
-  ) {
-    diffFormat = generateGradleDiff(currentVersion, fixVersion, location)
-  } else if (path.endsWith('cargo.toml')) {
-    diffFormat = generateCargoDiff(currentVersion, fixVersion, location)
-  } else if (path.endsWith('gemfile')) {
-    diffFormat = generateBundlerDiff(currentVersion, fixVersion, location)
-  } else if (path.endsWith('go.mod')) {
-    diffFormat = generateGoDiff(currentVersion, fixVersion, location)
+  if (parentPackage) {
+    // Generate diff for the parent package's dependency
+    diffFormat = [
+      `[**${targetLocation}**](${getRelativeFileLink(targetLocation)})`,
+      '```diff',
+      `-    "${parentPackage.name}": "${currentVersion}"`,
+      `+    "${parentPackage.name}": "${fixVersion}"`,
+      '```',
+      '',
+      '> ℹ️ This package is a dependency of ' + parentPackage.name
+    ].join('\n')
   } else {
-    diffFormat = generateGenericDiff(currentVersion, fixVersion, location)
+    // Use existing diff generation logic for direct dependencies
+    if (path.includes('package-lock.json')) {
+      const packageJsonPath = location.replace(
+        'package-lock.json',
+        'package.json'
+      )
+      diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath)
+    } else if (path.includes('yarn.lock')) {
+      const packageJsonPath = location.replace('yarn.lock', 'package.json')
+      diffFormat = generateNpmDiff(currentVersion, fixVersion, packageJsonPath)
+    } else if (path.endsWith('package.json')) {
+      diffFormat = generateNpmDiff(currentVersion, fixVersion, location)
+    } else if (path.endsWith('requirements.txt')) {
+      diffFormat = generatePipDiff(currentVersion, fixVersion, location)
+    } else if (path.endsWith('pom.xml')) {
+      diffFormat = generateMavenDiff(currentVersion, fixVersion, location)
+    } else if (
+      path.endsWith('build.gradle') ||
+      path.endsWith('build.gradle.kts')
+    ) {
+      diffFormat = generateGradleDiff(currentVersion, fixVersion, location)
+    } else if (path.endsWith('cargo.toml')) {
+      diffFormat = generateCargoDiff(currentVersion, fixVersion, location)
+    } else if (path.endsWith('go.mod')) {
+      diffFormat = generateGoDiff(currentVersion, fixVersion, location)
+    } else {
+      diffFormat = generateGenericDiff(currentVersion, fixVersion, location)
+    }
   }
 
   return diffFormat
@@ -690,7 +736,12 @@ function generateVulnerabilityReport(
       section.push('<summary>📝 View upgrade diff</summary>')
       section.push('')
       section.push(
-        generateVersionDiff(currentVersion, bestFix, firstVuln.location)
+        generateVersionDiff(
+          currentVersion,
+          bestFix,
+          firstVuln.location,
+          firstVuln.parentPackage
+        )
       )
       section.push('</details>')
     } else {
