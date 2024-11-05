@@ -41,7 +41,11 @@ export interface IArtifact {
   version: string
   type: string
   foundBy: string[]
-  locations: string[] // note: only dir scans are supported, not image scans
+  locations: {
+    path: string
+    layerID?: string
+  }[]
+  packageManager?: string
 }
 export function getResultsDiff(
   head: IGrypeFinding[],
@@ -61,28 +65,105 @@ export function getResultsDiff(
   }
   return results
 }
+
+interface GroupedVulnerability {
+  packageName: string
+  packageVersion: string
+  cves: string[]
+  severity: string[]
+  ecosystem: string
+  packageManager: string
+  location: string
+  sources: string[]
+  cvssScores: string[]
+  descriptions: string[]
+  fixVersions: string[]
+}
+
+function groupVulnerabilities(
+  findings: IGrypeFinding[]
+): GroupedVulnerability[] {
+  const groupedMap = new Map<string, GroupedVulnerability>()
+
+  findings.forEach(finding => {
+    const key = finding.artifact.name
+    const location = finding.artifact.locations[0]?.path || 'unknown'
+    let packageManager = finding.artifact.packageManager || 'unknown'
+
+    // Determine package manager from file path
+    if (location.includes('package.json')) packageManager = 'npm'
+    else if (location.includes('requirements.txt')) packageManager = 'pip'
+    else if (location.includes('Gemfile')) packageManager = 'bundler'
+    else if (location.includes('go.mod')) packageManager = 'go'
+    else if (location.includes('pom.xml')) packageManager = 'maven'
+
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        packageName: finding.artifact.name,
+        packageVersion: finding.artifact.version,
+        cves: [],
+        severity: [],
+        ecosystem: finding.artifact.type,
+        packageManager,
+        location,
+        sources: [],
+        cvssScores: [],
+        descriptions: [],
+        fixVersions: []
+      })
+    }
+
+    const group = groupedMap.get(key)!
+    if (!group.cves.includes(finding.vulnerability.id)) {
+      group.cves.push(finding.vulnerability.id)
+      group.severity.push(finding.vulnerability.severity)
+      group.sources.push(finding.vulnerability.dataSource)
+      group.descriptions.push(finding.vulnerability.description)
+
+      const cvssScore = finding.vulnerability.cvss
+        ?.map(cvss => cvss.metrics?.baseScore.toString())
+        .filter(score => score)
+        .join(',')
+      if (cvssScore) {
+        group.cvssScores.push(cvssScore)
+      }
+
+      if (finding.vulnerability.fix?.versions.length) {
+        group.fixVersions.push(...finding.vulnerability.fix.versions)
+      }
+    }
+  })
+
+  return Array.from(groupedMap.values())
+}
+
 export function mapToReport(
   results: IGrypeFinding[],
   headers: string
 ): { [key: string]: string | undefined }[] {
+  const groupedResults = groupVulnerabilities(results)
   const headerList = headers.split(',').map(h => h.trim())
+
   const allFields = {
-    CVE: (r: IGrypeFinding) => r.vulnerability.id,
-    'Package Name': (r: IGrypeFinding) => r.artifact.name,
-    'Package Version': (r: IGrypeFinding) => r.artifact.version,
-    Ecosystem: (r: IGrypeFinding) => r.artifact.type,
-    Source: (r: IGrypeFinding) => r.vulnerability.dataSource,
-    Severity: (r: IGrypeFinding) => r.vulnerability.severity,
-    CVSS: (r: IGrypeFinding) =>
-      r.vulnerability.cvss?.map(cvss => cvss.metrics?.baseScore).join(','),
-    Description: (r: IGrypeFinding) => r.vulnerability.description,
-    'Related Vulnerabilities': (r: IGrypeFinding) =>
-      r.relatedVulnerabilities.map(vuln => vuln.id).join(','),
-    'Fix Versions': (r: IGrypeFinding) =>
-      r.vulnerability.fix?.versions.join(',')
+    CVE: (r: GroupedVulnerability) => r.cves.join(', '),
+    'Package Name': (r: GroupedVulnerability) => r.packageName,
+    'Package Version': (r: GroupedVulnerability) => r.packageVersion,
+    Ecosystem: (r: GroupedVulnerability) => r.ecosystem,
+    'Package Manager': (r: GroupedVulnerability) => r.packageManager,
+    Location: (r: GroupedVulnerability) => r.location,
+    Source: (r: GroupedVulnerability) => r.sources.join(', '),
+    Severity: (r: GroupedVulnerability) =>
+      Array.from(new Set(r.severity)).join(', '),
+    CVSS: (r: GroupedVulnerability) =>
+      Array.from(new Set(r.cvssScores)).join(', '),
+    Description: (r: GroupedVulnerability) => r.descriptions.join('\n\n'),
+    'Fix Versions': (r: GroupedVulnerability) => {
+      const versions = Array.from(new Set(r.fixVersions))
+      return versions.length ? versions.join(', ') : undefined
+    }
   }
 
-  return results.map(result => {
+  return groupedResults.map(result => {
     const reportEntry: { [key: string]: string | undefined } = {}
     headerList.forEach(header => {
       if (header in allFields) {
@@ -93,6 +174,7 @@ export function mapToReport(
     return reportEntry
   })
 }
+
 async function downloadGrype(version = grypeVersion): Promise<string> {
   const url = `https://raw.githubusercontent.com/anchore/grype/main/install.sh`
 

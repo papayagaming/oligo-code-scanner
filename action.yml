@@ -40,9 +40,9 @@ inputs:
     required: false
     default: 'false'
   headers:
-    description: 'Comma-separated list of headers to show in the output. Default includes all available headers (CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions)'
+    description: 'Comma-separated list of headers to show in the output.'
     required: false
-    default: 'CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions'
+    default: 'CVE,Package Name,Package Version,Ecosystem,Package Manager,Location,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions'
   create-pr-comment:
     description: 'Whether to create/update a sticky PR comment with the vulnerability report'
     required: false

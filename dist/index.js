@@ -34910,21 +34910,76 @@ function getResultsDiff(head, base) {
     }
     return results;
 }
+function groupVulnerabilities(findings) {
+    const groupedMap = new Map();
+    findings.forEach(finding => {
+        var _a, _b, _c;
+        const key = finding.artifact.name;
+        const location = ((_a = finding.artifact.locations[0]) === null || _a === void 0 ? void 0 : _a.path) || 'unknown';
+        let packageManager = finding.artifact.packageManager || 'unknown';
+        // Determine package manager from file path
+        if (location.includes('package.json'))
+            packageManager = 'npm';
+        else if (location.includes('requirements.txt'))
+            packageManager = 'pip';
+        else if (location.includes('Gemfile'))
+            packageManager = 'bundler';
+        else if (location.includes('go.mod'))
+            packageManager = 'go';
+        else if (location.includes('pom.xml'))
+            packageManager = 'maven';
+        if (!groupedMap.has(key)) {
+            groupedMap.set(key, {
+                packageName: finding.artifact.name,
+                packageVersion: finding.artifact.version,
+                cves: [],
+                severity: [],
+                ecosystem: finding.artifact.type,
+                packageManager,
+                location,
+                sources: [],
+                cvssScores: [],
+                descriptions: [],
+                fixVersions: []
+            });
+        }
+        const group = groupedMap.get(key);
+        if (!group.cves.includes(finding.vulnerability.id)) {
+            group.cves.push(finding.vulnerability.id);
+            group.severity.push(finding.vulnerability.severity);
+            group.sources.push(finding.vulnerability.dataSource);
+            group.descriptions.push(finding.vulnerability.description);
+            const cvssScore = (_b = finding.vulnerability.cvss) === null || _b === void 0 ? void 0 : _b.map(cvss => { var _a; return (_a = cvss.metrics) === null || _a === void 0 ? void 0 : _a.baseScore.toString(); }).filter(score => score).join(',');
+            if (cvssScore) {
+                group.cvssScores.push(cvssScore);
+            }
+            if ((_c = finding.vulnerability.fix) === null || _c === void 0 ? void 0 : _c.versions.length) {
+                group.fixVersions.push(...finding.vulnerability.fix.versions);
+            }
+        }
+    });
+    return Array.from(groupedMap.values());
+}
 function mapToReport(results, headers) {
+    const groupedResults = groupVulnerabilities(results);
     const headerList = headers.split(',').map(h => h.trim());
     const allFields = {
-        CVE: (r) => r.vulnerability.id,
-        'Package Name': (r) => r.artifact.name,
-        'Package Version': (r) => r.artifact.version,
-        Ecosystem: (r) => r.artifact.type,
-        Source: (r) => r.vulnerability.dataSource,
-        Severity: (r) => r.vulnerability.severity,
-        CVSS: (r) => { var _a; return (_a = r.vulnerability.cvss) === null || _a === void 0 ? void 0 : _a.map(cvss => { var _a; return (_a = cvss.metrics) === null || _a === void 0 ? void 0 : _a.baseScore; }).join(','); },
-        Description: (r) => r.vulnerability.description,
-        'Related Vulnerabilities': (r) => r.relatedVulnerabilities.map(vuln => vuln.id).join(','),
-        'Fix Versions': (r) => { var _a; return (_a = r.vulnerability.fix) === null || _a === void 0 ? void 0 : _a.versions.join(','); }
+        CVE: (r) => r.cves.join(', '),
+        'Package Name': (r) => r.packageName,
+        'Package Version': (r) => r.packageVersion,
+        Ecosystem: (r) => r.ecosystem,
+        'Package Manager': (r) => r.packageManager,
+        Location: (r) => r.location,
+        Source: (r) => r.sources.join(', '),
+        Severity: (r) => Array.from(new Set(r.severity)).join(', '),
+        CVSS: (r) => Array.from(new Set(r.cvssScores)).join(', '),
+        Description: (r) => r.descriptions.join('\n\n'),
+        'Fix Versions': (r) => {
+            const versions = Array.from(new Set(r.fixVersions));
+            return versions.length ? versions.join(', ') : undefined;
+        }
     };
-    return results.map(result => {
+    return groupedResults.map(result => {
         const reportEntry = {};
         headerList.forEach(header => {
             if (header in allFields) {
