@@ -35164,8 +35164,8 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
             });
         }));
         if (core.isDebug()) {
-            core.info('Grype output:');
-            core.info(cmdOutput);
+            core.debug('Grype output:');
+            core.debug(cmdOutput);
         }
         switch (outputFormat) {
             case 'sarif': {
@@ -35178,9 +35178,9 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
                 // const REPORT_FILE = "./results.json";
                 // fs.writeFileSync(REPORT_FILE, );
                 try {
-                    core.info(`Parsing command output: ${cmdOutput}`);
+                    core.debug(`Parsing command output: ${cmdOutput}`);
                     const parsed = JSON.parse(cmdOutput);
-                    core.info(`Parsed JSON structure: ${JSON.stringify(parsed)}`);
+                    core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`);
                     out.json = parsed.matches;
                     core.info(`Extracted matches: ${(_b = (_a = out.json) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 'undefined'} items`);
                 }
