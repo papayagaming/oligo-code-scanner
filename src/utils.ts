@@ -164,7 +164,8 @@ export function mapToReport(
       const cves = r.cves.join(', ')
       return `<details><summary>Click to view</summary><p>${cves}</p></details>`
     },
-    Package: (r: GroupedVulnerability) => `${r.packageName}@${r.packageVersion}`,
+    Package: (r: GroupedVulnerability) =>
+      `${r.packageName}@${r.packageVersion}`,
     Ecosystem: (r: GroupedVulnerability) => r.ecosystem,
     Location: (r: GroupedVulnerability) => r.location,
     Source: (r: GroupedVulnerability) => {
@@ -188,7 +189,11 @@ export function mapToReport(
     },
     'Best Fix': (r: GroupedVulnerability) => {
       if (!r.bestFixVersion) return 'No fix available'
-      const diff = generateVersionDiff(r.packageVersion, r.bestFixVersion, r.location)
+      const diff = generateVersionDiff(
+        r.packageVersion,
+        r.bestFixVersion,
+        r.location
+      )
       return `<details><summary>${r.bestFixVersion}</summary><p>${diff}</p></details>`
     }
   }
@@ -468,7 +473,11 @@ export async function runScan({
   return out
 }
 
-function generateVersionDiff(currentVersion: string, fixVersion: string, location: string): string {
+function generateVersionDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
   const lines = [
     '```diff',
     `--- ${location}`,

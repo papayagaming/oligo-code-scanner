@@ -34934,18 +34934,6 @@ function groupVulnerabilities(findings) {
         var _a, _b, _c;
         const key = finding.artifact.name;
         const location = ((_a = finding.artifact.locations[0]) === null || _a === void 0 ? void 0 : _a.path) || 'unknown';
-        let packageManager = finding.artifact.packageManager || 'unknown';
-        // Determine package manager from file path
-        if (location.includes('package.json'))
-            packageManager = 'npm';
-        else if (location.includes('requirements.txt'))
-            packageManager = 'pip';
-        else if (location.includes('Gemfile'))
-            packageManager = 'bundler';
-        else if (location.includes('go.mod'))
-            packageManager = 'go';
-        else if (location.includes('pom.xml'))
-            packageManager = 'maven';
         if (!groupedMap.has(key)) {
             groupedMap.set(key, {
                 packageName: finding.artifact.name,
@@ -34953,7 +34941,6 @@ function groupVulnerabilities(findings) {
                 cves: [],
                 severity: [],
                 ecosystem: finding.artifact.type,
-                packageManager,
                 location,
                 sources: [],
                 cvssScores: [],
@@ -34986,13 +34973,17 @@ function mapToReport(results, headers) {
     const groupedResults = groupVulnerabilities(results);
     const headerList = headers.split(',').map(h => h.trim());
     const allFields = {
-        CVE: (r) => r.cves.join(', '),
-        'Package Name': (r) => r.packageName,
-        'Package Version': (r) => r.packageVersion,
+        CVE: (r) => {
+            const cves = r.cves.join(', ');
+            return `<details><summary>Click to view</summary><p>${cves}</p></details>`;
+        },
+        Package: (r) => `${r.packageName}@${r.packageVersion}`,
         Ecosystem: (r) => r.ecosystem,
-        'Package Manager': (r) => r.packageManager,
         Location: (r) => r.location,
-        Source: (r) => r.sources.join(', '),
+        Source: (r) => {
+            const sources = Array.from(new Set(r.sources)).join(', ');
+            return `<details><summary>Click to view</summary><p>${sources}</p></details>`;
+        },
         Severity: (r) => Array.from(new Set(r.severity)).join(', '),
         CVSS: (r) => Array.from(new Set(r.cvssScores)).join(', '),
         Description: (r) => {
@@ -35005,7 +34996,12 @@ function mapToReport(results, headers) {
             const versions = Array.from(new Set(r.fixVersions));
             return versions.length ? versions.join(', ') : undefined;
         },
-        'Best Fix': (r) => r.bestFixVersion || 'No fix available'
+        'Best Fix': (r) => {
+            if (!r.bestFixVersion)
+                return 'No fix available';
+            const diff = generateVersionDiff(r.packageVersion, r.bestFixVersion, r.location);
+            return `<details><summary>${r.bestFixVersion}</summary><p>${diff}</p></details>`;
+        }
     };
     return groupedResults.map(result => {
         const reportEntry = {};
@@ -35215,6 +35211,17 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
         }
         return out;
     });
+}
+function generateVersionDiff(currentVersion, fixVersion, location) {
+    const lines = [
+        '```diff',
+        `--- ${location}`,
+        `+++ ${location}`,
+        `-  "version": "${currentVersion}"`,
+        `+  "version": "${fixVersion}"`,
+        '```'
+    ];
+    return lines.join('\n');
 }
 
 // EXTERNAL MODULE: ./node_modules/sentence-case/dist/index.js
@@ -35493,7 +35500,7 @@ function run() {
             const severityCutoff = core.getInput('severity-cutoff') || 'medium';
             const onlyFixed = core.getInput('only-fixed') || 'false';
             const headers = core.getInput('headers') ||
-                'CVE,Package Name,Package Version,Ecosystem,Package Manager,Location,Source,Severity,CVSS,Description,Fix Versions,Best Fix';
+                'CVE,Package Name,Package Version,Ecosystem,Location,Source,Severity,CVSS,Description,Fix Versions,Best Fix';
             const addCpesIfNone = 'true';
             const byCve = 'true';
             const vex = '';
