@@ -57,7 +57,6 @@ export async function createOrUpdatePRComment(markdown: string): Promise<void> {
 The following vulnerabilities were found in your dependencies:
 
 ${markdown}
-
 `
 
     if (existingComment) {

@@ -182,7 +182,11 @@ export function mapToReport(
       Array.from(new Set(r.severity)).join(', '),
     CVSS: (r: GroupedVulnerability) =>
       Array.from(new Set(r.cvssScores)).join(', '),
-    Description: (r: GroupedVulnerability) => r.descriptions.join('\n\n'),
+    Description: (r: GroupedVulnerability) => {
+      const descriptions = Array.from(new Set(r.descriptions))
+      if (descriptions.length === 0) return undefined
+      return `<details><summary>Click to view</summary><p>${descriptions.join('<br><br>')}</p></details>`
+    },
     'Fix Versions': (r: GroupedVulnerability) => {
       const versions = Array.from(new Set(r.fixVersions))
       return versions.length ? versions.join(', ') : undefined
@@ -195,8 +199,10 @@ export function mapToReport(
     const reportEntry: { [key: string]: string | undefined } = {}
     headerList.forEach(header => {
       if (header in allFields) {
-        reportEntry[header] =
-          allFields[header as keyof typeof allFields](result)
+        const value = allFields[header as keyof typeof allFields](result)
+        if (value !== undefined) {
+          reportEntry[header] = value
+        }
       }
     })
     return reportEntry
