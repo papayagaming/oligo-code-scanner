@@ -62,25 +62,31 @@ export function getResultsDiff(
   return results
 }
 export function mapToReport(
-  results: IGrypeFinding[]
+  results: IGrypeFinding[],
+  headers: string
 ): { [key: string]: string | undefined }[] {
+  const headerList = headers.split(',').map(h => h.trim())
+  const allFields = {
+    'CVE': (r: IGrypeFinding) => r.vulnerability.id,
+    'Package Name': (r: IGrypeFinding) => r.artifact.name,
+    'Package Version': (r: IGrypeFinding) => r.artifact.version,
+    'Ecosystem': (r: IGrypeFinding) => r.artifact.type,
+    'Source': (r: IGrypeFinding) => r.vulnerability.dataSource,
+    'Severity': (r: IGrypeFinding) => r.vulnerability.severity,
+    'CVSS': (r: IGrypeFinding) => r.vulnerability.cvss?.map(cvss => cvss.metrics?.baseScore).join(','),
+    'Description': (r: IGrypeFinding) => r.vulnerability.description,
+    'Related Vulnerabilities': (r: IGrypeFinding) => r.relatedVulnerabilities.map(vuln => vuln.id).join(','),
+    'Fix Versions': (r: IGrypeFinding) => r.vulnerability.fix?.versions.join(',')
+  }
+
   return results.map(result => {
-    return {
-      CVE: result.vulnerability.id,
-      'Package Name': result.artifact.name,
-      'Package Version': result.artifact.version,
-      Ecosystem: result.artifact.type,
-      Source: result.vulnerability.dataSource,
-      Severity: result.vulnerability.severity,
-      CVSS: result.vulnerability.cvss
-        ?.map(cvss => cvss.metrics?.baseScore)
-        .join(','),
-      Description: result.vulnerability.description,
-      'Related Vulnerabilities': result.relatedVulnerabilities
-        .map(vuln => vuln.id)
-        .join(','),
-      'Fix Versions': result.vulnerability.fix?.versions.join(',')
-    }
+    const reportEntry: { [key: string]: string | undefined } = {}
+    headerList.forEach(header => {
+      if (header in allFields) {
+        reportEntry[header] = allFields[header as keyof typeof allFields](result)
+      }
+    })
+    return reportEntry
   })
 }
 async function downloadGrype(version = grypeVersion): Promise<string> {

@@ -39,6 +39,10 @@ inputs:
       available.  Default is false.'
     required: false
     default: 'false'
+  headers:
+    description: 'Comma-separated list of headers to show in the output. Default includes all available headers (CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions)'
+    required: false
+    default: 'CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions'
  
 outputs:
   sarif:

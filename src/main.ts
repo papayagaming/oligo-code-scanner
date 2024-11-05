@@ -16,6 +16,7 @@ export async function run(): Promise<void> {
     const outputFormat = core.getInput('output-format') || 'json'
     const severityCutoff = core.getInput('severity-cutoff') || 'medium'
     const onlyFixed = core.getInput('only-fixed') || 'false'
+    const headers = core.getInput('headers') || 'CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions'
     const addCpesIfNone = 'true'
     const byCve = 'true'
     const vex = ''
@@ -47,7 +48,7 @@ export async function run(): Promise<void> {
         const results = getResultsDiff(out.json, outbase.json)
         core.notice(`${results.length} Vulnerabilities found`)
         if (results.length > 0) {
-          const report = mapToReport(results)
+          const report = mapToReport(results, headers)
           core.setOutput('json', report)
           core.setOutput('markdown', tablemark(report))
         } else {
@@ -70,7 +71,7 @@ export async function run(): Promise<void> {
       if (results) {
         core.info(`${results?.length} Vulnerabilities found`)
         if (results?.length > 0) {
-          const report = mapToReport(results)
+          const report = mapToReport(results, headers)
           core.setOutput('json', report)
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
