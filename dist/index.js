@@ -34910,6 +34910,24 @@ function getResultsDiff(head, base) {
     }
     return results;
 }
+function findBestFixVersion(versions) {
+    if (!versions.length)
+        return undefined;
+    // Remove duplicates
+    const uniqueVersions = Array.from(new Set(versions));
+    // Sort versions in descending order (assuming semantic versioning)
+    return uniqueVersions.sort((a, b) => {
+        const aParts = a.split('.').map(p => parseInt(p.replace(/[^0-9]/g, ''), 10));
+        const bParts = b.split('.').map(p => parseInt(p.replace(/[^0-9]/g, ''), 10));
+        for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+            const aVal = aParts[i] || 0;
+            const bVal = bParts[i] || 0;
+            if (aVal !== bVal)
+                return bVal - aVal;
+        }
+        return 0;
+    })[0];
+}
 function groupVulnerabilities(findings) {
     const groupedMap = new Map();
     findings.forEach(finding => {
@@ -34958,6 +34976,10 @@ function groupVulnerabilities(findings) {
             }
         }
     });
+    // Calculate best fix version for each group
+    for (const group of groupedMap.values()) {
+        group.bestFixVersion = findBestFixVersion(group.fixVersions);
+    }
     return Array.from(groupedMap.values());
 }
 function mapToReport(results, headers) {
@@ -34977,7 +34999,8 @@ function mapToReport(results, headers) {
         'Fix Versions': (r) => {
             const versions = Array.from(new Set(r.fixVersions));
             return versions.length ? versions.join(', ') : undefined;
-        }
+        },
+        'Best Fix': (r) => r.bestFixVersion || 'No fix available'
     };
     return groupedResults.map(result => {
         const reportEntry = {};
@@ -35457,7 +35480,7 @@ function run() {
             const severityCutoff = core.getInput('severity-cutoff') || 'medium';
             const onlyFixed = core.getInput('only-fixed') || 'false';
             const headers = core.getInput('headers') ||
-                'CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions';
+                'CVE,Package Name,Package Version,Ecosystem,Package Manager,Location,Source,Severity,CVSS,Description,Best Fix';
             const addCpesIfNone = 'true';
             const byCve = 'true';
             const vex = '';
