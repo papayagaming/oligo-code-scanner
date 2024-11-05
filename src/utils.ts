@@ -155,61 +155,14 @@ function groupVulnerabilities(
 export function mapToReport(
   results: IGrypeFinding[],
   headers: string
-): { [key: string]: string | undefined }[] {
+): { markdown: string; json: { [key: string]: string | undefined }[] } {
   const groupedResults = groupVulnerabilities(results)
-  const headerList = headers.split(',').map(h => h.trim())
 
-  const allFields = {
-    CVE: (r: GroupedVulnerability) => {
-      const cves = r.cves.join(', ')
-      return `<details><summary>Click to view</summary><p>${cves}</p></details>`
-    },
-    Package: (r: GroupedVulnerability) =>
-      `${r.packageName}@${r.packageVersion}`,
-    Ecosystem: (r: GroupedVulnerability) => r.ecosystem,
-    Location: (r: GroupedVulnerability) => r.location,
-    Source: (r: GroupedVulnerability) => {
-      const sources = Array.from(new Set(r.sources)).join(', ')
-      return `<details><summary>Click to view</summary><p>${sources}</p></details>`
-    },
-    Severity: (r: GroupedVulnerability) =>
-      Array.from(new Set(r.severity)).join(', '),
-    CVSS: (r: GroupedVulnerability) =>
-      Array.from(new Set(r.cvssScores)).join(', '),
-    Description: (r: GroupedVulnerability) => {
-      const descriptions = Array.from(new Set(r.descriptions))
-      if (descriptions.length === 0) return undefined
-      return `<details><summary>Click to view</summary><p>${descriptions.join(
-        '<br><br>'
-      )}</p></details>`
-    },
-    'Fix Versions': (r: GroupedVulnerability) => {
-      const versions = Array.from(new Set(r.fixVersions))
-      return versions.length ? versions.join(', ') : undefined
-    },
-    'Best Fix': (r: GroupedVulnerability) => {
-      if (!r.bestFixVersion) return 'No fix available'
-      const diff = generateVersionDiff(
-        r.packageVersion,
-        r.bestFixVersion,
-        r.location
-      )
-      return `<details><summary>${r.bestFixVersion}</summary><p>${diff}</p></details>`
-    }
-  }
+  // Generate both formats
+  const markdown = generateVulnerabilityReport(groupedResults)
+  const json = generateJsonReport(groupedResults, headers)
 
-  return groupedResults.map(result => {
-    const reportEntry: { [key: string]: string | undefined } = {}
-    headerList.forEach(header => {
-      if (header in allFields) {
-        const value = allFields[header as keyof typeof allFields](result)
-        if (value !== undefined) {
-          reportEntry[header] = value
-        }
-      }
-    })
-    return reportEntry
-  })
+  return { markdown, json }
 }
 
 async function downloadGrype(version = grypeVersion): Promise<string> {
@@ -478,13 +431,293 @@ function generateVersionDiff(
   fixVersion: string,
   location: string
 ): string {
-  const lines = [
+  // Detect package management system based on file path
+  const path = location.toLowerCase()
+  let diffFormat: string
+
+  if (path.endsWith('package.json')) {
+    diffFormat = generateNpmDiff(currentVersion, fixVersion, location)
+  } else if (path.endsWith('requirements.txt')) {
+    diffFormat = generatePipDiff(currentVersion, fixVersion, location)
+  } else if (path.endsWith('pom.xml')) {
+    diffFormat = generateMavenDiff(currentVersion, fixVersion, location)
+  } else if (
+    path.endsWith('build.gradle') ||
+    path.endsWith('build.gradle.kts')
+  ) {
+    diffFormat = generateGradleDiff(currentVersion, fixVersion, location)
+  } else if (path.endsWith('cargo.toml')) {
+    diffFormat = generateCargoDiff(currentVersion, fixVersion, location)
+  } else if (path.endsWith('gemfile')) {
+    diffFormat = generateBundlerDiff(currentVersion, fixVersion, location)
+  } else if (path.endsWith('go.mod')) {
+    diffFormat = generateGoDiff(currentVersion, fixVersion, location)
+  } else {
+    // Default to generic version format
+    diffFormat = generateGenericDiff(currentVersion, fixVersion, location)
+  }
+
+  return diffFormat
+}
+
+function generateNpmDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  return [
     '```diff',
     `--- ${location}`,
     `+++ ${location}`,
-    `-  "version": "${currentVersion}"`,
-    `+  "version": "${fixVersion}"`,
+    `-    "version": "${currentVersion}"`,
+    `+    "version": "${fixVersion}"`,
     '```'
-  ]
-  return lines.join('\n')
+  ].join('\n')
+}
+
+function generatePipDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  const packageName = location.split('/').pop()?.split('==')[0] || 'package'
+  return [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-${packageName}==${currentVersion}`,
+    `+${packageName}==${fixVersion}`,
+    '```'
+  ].join('\n')
+}
+
+function generateMavenDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  return [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-        <version>${currentVersion}</version>`,
+    `+        <version>${fixVersion}</version>`,
+    '```'
+  ].join('\n')
+}
+
+function generateGradleDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  return [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-    implementation "group:name:${currentVersion}"`,
+    `+    implementation "group:name:${fixVersion}"`,
+    '```'
+  ].join('\n')
+}
+
+function generateCargoDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  return [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-version = "${currentVersion}"`,
+    `+version = "${fixVersion}"`,
+    '```'
+  ].join('\n')
+}
+
+function generateBundlerDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  return [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-gem 'package', '${currentVersion}'`,
+    `+gem 'package', '${fixVersion}'`,
+    '```'
+  ].join('\n')
+}
+
+function generateGoDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  return [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-require package v${currentVersion}`,
+    `+require package v${fixVersion}`,
+    '```'
+  ].join('\n')
+}
+
+function generateGenericDiff(
+  currentVersion: string,
+  fixVersion: string,
+  location: string
+): string {
+  return [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-version: ${currentVersion}`,
+    `+version: ${fixVersion}`,
+    '```'
+  ].join('\n')
+}
+
+function generateVulnerabilityReport(
+  groupedResults: GroupedVulnerability[]
+): string {
+  const packageGroups = new Map<string, GroupedVulnerability[]>()
+
+  // Group by package name
+  groupedResults.forEach(vuln => {
+    if (!packageGroups.has(vuln.packageName)) {
+      packageGroups.set(vuln.packageName, [])
+    }
+    packageGroups.get(vuln.packageName)?.push(vuln)
+  })
+
+  const sections: string[] = []
+
+  // Generate markdown for each package
+  for (const [packageName, vulns] of packageGroups) {
+    const firstVuln = vulns[0]
+    const currentVersion = firstVuln.packageVersion
+    const bestFix = firstVuln.bestFixVersion
+
+    const severities = new Set(vulns.flatMap(v => v.severity))
+    const highestSeverity = [
+      'critical',
+      'high',
+      'medium',
+      'low',
+      'negligible'
+    ].find(sev => severities.has(sev))
+
+    const section = [`### 📦 ${packageName}@${currentVersion}`]
+
+    // Add severity badge
+    const severityColor = {
+      critical: 'red',
+      high: 'orange',
+      medium: 'yellow',
+      low: 'blue',
+      negligible: 'gray'
+    }[highestSeverity || 'gray']
+
+    section.push(
+      `![${highestSeverity}](https://img.shields.io/badge/severity-${highestSeverity}-${severityColor})`
+    )
+
+    // Add vulnerability details
+    section.push('\n#### 🔍 Vulnerabilities Found\n')
+    vulns.forEach(vuln => {
+      const cveList = vuln.cves
+        .map(cve => `[\`${cve}\`](https://nvd.nist.gov/vuln/detail/${cve})`)
+        .join(', ')
+      section.push(`<details>
+<summary><strong>${vuln.severity.join(', ')}</strong> - ${cveList}</summary>
+
+- **CVSS Scores**: ${vuln.cvssScores.join(', ')}
+- **Source**: ${vuln.sources.join(', ')}
+- **Description**: ${vuln.descriptions.join('\n')}
+</details>`)
+    })
+
+    // Add fix information
+    if (bestFix) {
+      section.push('\n#### 🛠️ Recommended Fix\n')
+      section.push(`Upgrade to version \`${bestFix}\`\n`)
+      section.push('<details><summary>View upgrade diff</summary>\n')
+      section.push(
+        generateVersionDiff(currentVersion, bestFix, firstVuln.location)
+      )
+      section.push('</details>')
+    } else {
+      section.push('\n#### ⚠️ No Fix Available\n')
+      section.push('Consider reviewing this dependency for alternatives.')
+    }
+
+    section.push('\n---\n')
+    sections.push(section.join('\n'))
+  }
+
+  return `# 🔒 Security Vulnerability Report
+
+${sections.join('\n')}
+
+> 💡 This report shows newly introduced vulnerabilities. Each package includes its severity, CVE details, and recommended fixes.`
+}
+
+function generateJsonReport(
+  groupedResults: GroupedVulnerability[],
+  headers: string
+): { [key: string]: string | undefined }[] {
+  const headerFields = headers.split(',')
+  const jsonReport = groupedResults.map(vuln => {
+    const reportEntry: { [key: string]: string | undefined } = {}
+
+    headerFields.forEach(header => {
+      switch (header.trim()) {
+        case 'CVE':
+          reportEntry[header] = vuln.cves.join(', ')
+          break
+        case 'Package Name':
+          reportEntry[header] = vuln.packageName
+          break
+        case 'Package Version':
+          reportEntry[header] = vuln.packageVersion
+          break
+        case 'Ecosystem':
+          reportEntry[header] = vuln.ecosystem
+          break
+        case 'Location':
+          reportEntry[header] = vuln.location
+          break
+        case 'Source':
+          reportEntry[header] = vuln.sources.join(', ')
+          break
+        case 'Severity':
+          reportEntry[header] = Array.from(new Set(vuln.severity)).join(', ')
+          break
+        case 'CVSS':
+          reportEntry[header] = Array.from(new Set(vuln.cvssScores)).join(', ')
+          break
+        case 'Description':
+          reportEntry[header] = Array.from(new Set(vuln.descriptions)).join(
+            '\n'
+          )
+          break
+        case 'Fix Versions':
+          reportEntry[header] = Array.from(new Set(vuln.fixVersions)).join(', ')
+          break
+        case 'Best Fix':
+          reportEntry[header] = vuln.bestFixVersion || 'No fix available'
+          break
+        default:
+          reportEntry[header] = undefined
+      }
+    })
+
+    return reportEntry
+  })
+
+  return jsonReport
 }

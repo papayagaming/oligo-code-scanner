@@ -57,17 +57,16 @@ export async function run(): Promise<void> {
         const results = getResultsDiff(out.json, outbase.json)
         core.notice(`${results.length} Vulnerabilities found`)
         if (results.length > 0) {
-          const report = mapToReport(results, headers)
-          core.setOutput('json', report)
-          const reportTable = tablemark(report)
-          core.setOutput('markdown', reportTable)
-          core.info(`output : ${reportTable}`)
+          const { markdown, json } = mapToReport(results, headers)
+          core.setOutput('json', json)
+          core.setOutput('markdown', markdown)
+          core.info(`Generated vulnerability report`)
           core.info(
             `Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`
           )
           if (createPRComment && results.length > 0) {
-            core.info('Attempting to create/update PR comment for diff results')
-            await createOrUpdatePRComment(reportTable)
+            core.info('Creating/updating PR comment with vulnerability report')
+            await createOrUpdatePRComment(markdown)
           }
         } else {
           core.setOutput('json', [])
@@ -94,19 +93,16 @@ export async function run(): Promise<void> {
       if (results) {
         core.info(`${results?.length} Vulnerabilities found`)
         if (results?.length > 0) {
-          const report = mapToReport(results, headers)
-          core.setOutput('json', report)
-          const reportTable = tablemark(report)
-          core.setOutput('markdown', reportTable)
-          core.info(`output : ${reportTable}`)
+          const { markdown, json } = mapToReport(results, headers)
+          core.setOutput('json', json)
+          core.setOutput('markdown', markdown)
+          core.info(`Generated vulnerability report`)
           core.info(
             `Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results?.length}`
           )
           if (createPRComment && results?.length > 0) {
-            core.info(
-              'Attempting to create/update PR comment for single scan results'
-            )
-            await createOrUpdatePRComment(reportTable)
+            core.info('Creating/updating PR comment with vulnerability report')
+            await createOrUpdatePRComment(markdown)
           }
         }
       }
