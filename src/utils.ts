@@ -473,64 +473,48 @@ export async function runScan({
       try {
         core.debug(`Parsing command output: ${cmdOutput}`)
         const parsed = JSON.parse(cmdOutput)
-        core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`)
 
         // Grype outputs matches in an array
-        if (Array.isArray(parsed.matches)) {
-          // Enrich findings with third-party vulnerability data
-          out.json = await Promise.all(
-            parsed.matches.map(
-              async (match: {
-                vulnerability: {
-                  id: string
-                  fix: { versions: any }
-                  description: any
-                }
-              }) => {
-                try {
-                  // Check NVD database for additional fix information
-                  const nvdData = await fetchNVDData(match.vulnerability.id)
-                  if (nvdData) {
-                    match.vulnerability.fix = {
-                      ...match.vulnerability.fix,
-                      versions: [
-                        ...(match.vulnerability.fix?.versions || []),
-                        ...nvdData.fixVersions
-                      ]
-                    }
-                    match.vulnerability.description =
-                      nvdData.description || match.vulnerability.description
-                  }
-
-                  // Check GitHub Advisory Database
-                  const ghsaData = await fetchGitHubSecurityAdvisory(
-                    match.vulnerability.id
-                  )
-                  if (ghsaData) {
-                    match.vulnerability.fix = {
-                      ...match.vulnerability.fix,
-                      versions: [
-                        ...(match.vulnerability.fix?.versions || []),
-                        ...ghsaData.fixVersions
-                      ]
-                    }
-                  }
-
-                  return match
-                } catch (error) {
-                  core.debug(`Error enriching vulnerability data: ${error}`)
-                  return match
-                }
+        if (parsed.matches && Array.isArray(parsed.matches)) {
+          out.json = parsed.matches.map((match: any) => {
+            // Ensure the vulnerability object has required fields
+            if (!match.vulnerability) {
+              match.vulnerability = {
+                id: 'UNKNOWN',
+                severity: 'UNKNOWN',
+                dataSource: '',
+                links: [],
+                description: ''
               }
-            )
-          )
+            }
+
+            // Ensure the artifact object has required fields
+            if (!match.artifact) {
+              match.artifact = {
+                name: 'UNKNOWN',
+                version: 'UNKNOWN',
+                type: 'UNKNOWN',
+                foundBy: [],
+                locations: []
+              }
+            }
+
+            // Add fix information if available
+            if (match.vulnerability.fix?.versions) {
+              match.vulnerability.fixedInVersion =
+                match.vulnerability.fix.versions[0]
+            }
+
+            return match
+          })
+
+          core.info(`Extracted matches: ${out?.json?.length} items`)
         } else {
+          core.warning('No matches found in Grype output')
           out.json = []
         }
-
-        core.info(`Extracted and enriched matches: ${out.json.length} items`)
       } catch (error) {
-        core.info(`Error parsing JSON output: ${error}`)
+        core.error(`Error parsing JSON output: ${error}`)
         out.json = []
       }
       break

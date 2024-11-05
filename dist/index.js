@@ -34188,7 +34188,7 @@ var __webpack_exports__ = {};
 __nccwpck_require__.r(__webpack_exports__);
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var core = __nccwpck_require__(2186);
+var lib_core = __nccwpck_require__(2186);
 // EXTERNAL MODULE: ./node_modules/@actions/exec/lib/exec.js
 var exec = __nccwpck_require__(1514);
 // EXTERNAL MODULE: ./node_modules/@actions/tool-cache/lib/tool-cache.js
@@ -34285,7 +34285,7 @@ function groupVulnerabilities(findings) {
             }
         }
         catch (error) {
-            core.debug(`Error finding parent package: ${error}`);
+            lib_core.debug(`Error finding parent package: ${error}`);
         }
         if (!groupedMap.has(key)) {
             groupedMap.set(key, {
@@ -34364,7 +34364,7 @@ function mapToReport(results, headers) {
 function downloadGrype(version = grypeVersion) {
     return __awaiter(this, void 0, void 0, function* () {
         const url = `https://raw.githubusercontent.com/anchore/grype/main/install.sh`;
-        core.info(`Installing ${version}`);
+        lib_core.info(`Installing ${version}`);
         // TODO: when grype starts supporting unreleased versions, support it here
         // Download the installer, and run
         const installPath = yield tool_cache.downloadTool(url);
@@ -34385,7 +34385,7 @@ function installGrype(version = grypeVersion) {
             grypePath = yield downloadGrype(version);
         }
         // Add tool to path for this and future actions to use
-        core.addPath(grypePath);
+        lib_core.addPath(grypePath);
         return `${grypePath}/${grypeBinary}`;
     });
 }
@@ -34404,8 +34404,8 @@ function multipleDefined(...args) {
 }
 function sourceInput() {
     // var image = core.getInput("image");
-    let path = core.getInput('path');
-    const basePath = core.getInput('base-path');
+    let path = lib_core.getInput('path');
+    const basePath = lib_core.getInput('base-path');
     // var sbom = core.getInput("sbom");
     // if (multipleDefined(image, path, sbom)) {
     //   throw new Error(
@@ -34431,13 +34431,14 @@ function sourceInput() {
  * Wait for a number of milliseconds. Resolves with 'done!' after the wait time.
  */
 function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, addCpesIfNone, byCve, vex }) {
+    var _a;
     return __awaiter(this, void 0, void 0, function* () {
         const out = {};
         const env = Object.assign(Object.assign({}, process.env), { GRYPE_CHECK_FOR_APP_UPDATE: 'true' });
         const SEVERITY_LIST = ['negligible', 'low', 'medium', 'high', 'critical'];
         const FORMAT_LIST = ['sarif', 'json', 'table'];
         const cmdArgs = [];
-        if (core.isDebug()) {
+        if (lib_core.isDebug()) {
             cmdArgs.push(`-vv`);
         }
         const parsedOnlyFixed = onlyFixed.toLowerCase() === 'true';
@@ -34452,16 +34453,16 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
             item === outputFormat.toLowerCase())) {
             throw new Error(`Invalid output-format value is set to ${outputFormat} - please ensure you are choosing either json or sarif`);
         }
-        core.info(`Installing grype version ${grypeVersion}`);
+        lib_core.info(`Installing grype version ${grypeVersion}`);
         yield installGrype(grypeVersion);
-        core.info(`Source: ${source}`);
-        core.info(`Fail Build: ${failBuild}`);
-        core.info(`Severity Cutoff: ${severityCutoff}`);
-        core.info(`Only Fixed: ${onlyFixed}`);
-        core.info(`Add Missing CPEs: ${addCpesIfNone}`);
-        core.info(`Orient by CVE: ${byCve}`);
-        core.info(`Output Format: ${outputFormat}`);
-        core.info('Creating options for GRYPE analyzer');
+        lib_core.info(`Source: ${source}`);
+        lib_core.info(`Fail Build: ${failBuild}`);
+        lib_core.info(`Severity Cutoff: ${severityCutoff}`);
+        lib_core.info(`Only Fixed: ${onlyFixed}`);
+        lib_core.info(`Add Missing CPEs: ${addCpesIfNone}`);
+        lib_core.info(`Orient by CVE: ${byCve}`);
+        lib_core.info(`Output Format: ${outputFormat}`);
+        lib_core.info('Creating options for GRYPE analyzer');
         // Run the grype analyzer
         let cmdOutput = '';
         const cmd = `${grypeBinary}`;
@@ -34491,8 +34492,8 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
                 next();
             }
         });
-        const exitCode = yield core.group(`${cmd} output...`, () => __awaiter(this, void 0, void 0, function* () {
-            core.info(`Executing: ${cmd} ${cmdArgs.join(' ')}`);
+        const exitCode = yield lib_core.group(`${cmd} output...`, () => __awaiter(this, void 0, void 0, function* () {
+            lib_core.info(`Executing: ${cmd} ${cmdArgs.join(' ')}`);
             return exec.exec(cmd, cmdArgs, {
                 env,
                 ignoreReturnCode: true,
@@ -34502,17 +34503,17 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
                         cmdOutput += buffer.toString();
                     },
                     stderr(buffer) {
-                        core.info(buffer.toString());
+                        lib_core.info(buffer.toString());
                     },
                     debug(message) {
-                        core.info(message);
+                        lib_core.info(message);
                     }
                 }
             });
         }));
-        if (core.isDebug()) {
-            core.debug('Grype output:');
-            core.debug(cmdOutput);
+        if (lib_core.isDebug()) {
+            lib_core.debug('Grype output:');
+            lib_core.debug(cmdOutput);
         }
         switch (outputFormat) {
             case 'sarif': {
@@ -34523,67 +34524,67 @@ function runScan({ source, failBuild, severityCutoff, onlyFixed, outputFormat, a
             }
             case 'json': {
                 try {
-                    core.debug(`Parsing command output: ${cmdOutput}`);
+                    lib_core.debug(`Parsing command output: ${cmdOutput}`);
                     const parsed = JSON.parse(cmdOutput);
-                    core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`);
                     // Grype outputs matches in an array
-                    if (Array.isArray(parsed.matches)) {
-                        // Enrich findings with third-party vulnerability data
-                        out.json = yield Promise.all(parsed.matches.map((match) => __awaiter(this, void 0, void 0, function* () {
-                            var _a, _b;
-                            try {
-                                // Check NVD database for additional fix information
-                                const nvdData = yield fetchNVDData(match.vulnerability.id);
-                                if (nvdData) {
-                                    match.vulnerability.fix = Object.assign(Object.assign({}, match.vulnerability.fix), { versions: [
-                                            ...(((_a = match.vulnerability.fix) === null || _a === void 0 ? void 0 : _a.versions) || []),
-                                            ...nvdData.fixVersions
-                                        ] });
-                                    match.vulnerability.description =
-                                        nvdData.description || match.vulnerability.description;
-                                }
-                                // Check GitHub Advisory Database
-                                const ghsaData = yield fetchGitHubSecurityAdvisory(match.vulnerability.id);
-                                if (ghsaData) {
-                                    match.vulnerability.fix = Object.assign(Object.assign({}, match.vulnerability.fix), { versions: [
-                                            ...(((_b = match.vulnerability.fix) === null || _b === void 0 ? void 0 : _b.versions) || []),
-                                            ...ghsaData.fixVersions
-                                        ] });
-                                }
-                                return match;
+                    if (parsed.matches && Array.isArray(parsed.matches)) {
+                        out.json = parsed.matches.map((match) => {
+                            var _a;
+                            // Ensure the vulnerability object has required fields
+                            if (!match.vulnerability) {
+                                match.vulnerability = {
+                                    id: 'UNKNOWN',
+                                    severity: 'UNKNOWN',
+                                    dataSource: '',
+                                    links: [],
+                                    description: ''
+                                };
                             }
-                            catch (error) {
-                                core.debug(`Error enriching vulnerability data: ${error}`);
-                                return match;
+                            // Ensure the artifact object has required fields
+                            if (!match.artifact) {
+                                match.artifact = {
+                                    name: 'UNKNOWN',
+                                    version: 'UNKNOWN',
+                                    type: 'UNKNOWN',
+                                    foundBy: [],
+                                    locations: []
+                                };
                             }
-                        })));
+                            // Add fix information if available
+                            if ((_a = match.vulnerability.fix) === null || _a === void 0 ? void 0 : _a.versions) {
+                                match.vulnerability.fixedInVersion =
+                                    match.vulnerability.fix.versions[0];
+                            }
+                            return match;
+                        });
+                        lib_core.info(`Extracted matches: ${(_a = out === null || out === void 0 ? void 0 : out.json) === null || _a === void 0 ? void 0 : _a.length} items`);
                     }
                     else {
+                        lib_core.warning('No matches found in Grype output');
                         out.json = [];
                     }
-                    core.info(`Extracted and enriched matches: ${out.json.length} items`);
                 }
                 catch (error) {
-                    core.info(`Error parsing JSON output: ${error}`);
+                    lib_core.error(`Error parsing JSON output: ${error}`);
                     out.json = [];
                 }
                 break;
             }
             default: // e.g. table
-                core.info(cmdOutput);
+                lib_core.info(cmdOutput);
         }
         // If there is a non-zero exit status code there are a couple of potential reporting paths
         if (exitCode > 0) {
             if (!severityCutoff) {
                 // There was a non-zero exit status but it wasn't because of failing severity, this must be
                 // a grype problem
-                core.warning('grype had a non-zero exit status when running');
+                lib_core.warning('grype had a non-zero exit status when running');
             }
             // There is a non-zero exit status code with severity cut off, although there is still a chance this is grype
             // that is broken, it will most probably be a failed severity. Using warning here will make it bubble up in the
             // Actions UI
             else
-                core.warning(`Failed minimum severity level. Found vulnerabilities with level '${severityCutoff}' or higher`);
+                lib_core.warning(`Failed minimum severity level. Found vulnerabilities with level '${severityCutoff}' or higher`);
         }
         return out;
     });
@@ -34926,7 +34927,7 @@ function findParentPackage(packageName, location, type) {
         return helper.findDependencyInTree(packageName, packageInfo);
     }
     catch (error) {
-        core.debug(`Error finding parent package: ${error}`);
+        lib_core.debug(`Error finding parent package: ${error}`);
         return undefined;
     }
 }
@@ -34968,7 +34969,7 @@ function fetchGitHubSecurityAdvisory(cveId) {
             const token = process.env.GITHUB_TOKEN;
             if (!token)
                 return null;
-            const octokit = lib_github.getOctokit(token);
+            const octokit = github.getOctokit(token);
             const query = `
       query($cveId: String!) {
         securityVulnerabilities(first: 1, where: {cveId: $cveId}) {
@@ -35045,16 +35046,16 @@ const COMMENT_MARKER = '<!-- oligo-scanner-report -->';
 function createOrUpdatePRComment(markdown) {
     return pr_comment_awaiter(this, void 0, void 0, function* () {
         try {
-            core.info('Starting createOrUpdatePRComment');
+            lib_core.info('Starting createOrUpdatePRComment');
             const token = process.env.GITHUB_TOKEN;
             if (!token) {
-                core.info('No GITHUB_TOKEN found in environment');
+                lib_core.info('No GITHUB_TOKEN found in environment');
                 throw new Error('GITHUB_TOKEN is required to create/update PR comments');
             }
-            core.info('GITHUB_TOKEN found');
+            lib_core.info('GITHUB_TOKEN found');
             const octokit = lib_github.getOctokit(token);
             const context = lib_github.context;
-            core.info(`GitHub context: ${JSON.stringify({
+            lib_core.info(`GitHub context: ${JSON.stringify({
                 eventName: context.eventName,
                 payload: {
                     pull_request: context.payload.pull_request ? 'exists' : 'undefined',
@@ -35062,21 +35063,21 @@ function createOrUpdatePRComment(markdown) {
                 }
             })}`);
             if (!context.payload.pull_request) {
-                core.info('No pull request context found - skipping comment creation');
+                lib_core.info('No pull request context found - skipping comment creation');
                 return;
             }
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
-            core.info(`PR details: owner=${owner}, repo=${repo}, issue_number=${issue_number}`);
+            lib_core.info(`PR details: owner=${owner}, repo=${repo}, issue_number=${issue_number}`);
             // Search for existing comment
-            core.info('Searching for existing comment');
+            lib_core.info('Searching for existing comment');
             const comments = yield octokit.rest.issues.listComments({
                 owner,
                 repo,
                 issue_number
             });
             const existingComment = comments.data.find((comment) => { var _a; return (_a = comment.body) === null || _a === void 0 ? void 0 : _a.includes(COMMENT_MARKER); });
-            core.info(`Existing comment found: ${existingComment ? 'yes' : 'no'}`);
+            lib_core.info(`Existing comment found: ${existingComment ? 'yes' : 'no'}`);
             const commentBody = `${COMMENT_MARKER}
 ## Vulnerability Scan Results
 
@@ -35085,29 +35086,29 @@ The following vulnerabilities were found in your dependencies:
 ${markdown}
 `;
             if (existingComment) {
-                core.info(`Updating existing comment ID: ${existingComment.id}`);
+                lib_core.info(`Updating existing comment ID: ${existingComment.id}`);
                 yield octokit.rest.issues.updateComment({
                     owner,
                     repo,
                     comment_id: existingComment.id,
                     body: commentBody
                 });
-                core.info('Successfully updated existing PR comment');
+                lib_core.info('Successfully updated existing PR comment');
             }
             else {
-                core.info('Creating new comment');
+                lib_core.info('Creating new comment');
                 yield octokit.rest.issues.createComment({
                     owner,
                     repo,
                     issue_number,
                     body: commentBody
                 });
-                core.info('Successfully created new PR comment');
+                lib_core.info('Successfully created new PR comment');
             }
         }
         catch (error) {
-            core.info(`Error in createOrUpdatePRComment: ${error}`);
-            core.warning(`Failed to create/update PR comment: ${error}`);
+            lib_core.info(`Error in createOrUpdatePRComment: ${error}`);
+            lib_core.warning(`Failed to create/update PR comment: ${error}`);
         }
     });
 }
@@ -35131,22 +35132,22 @@ var main_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arg
 function run() {
     return main_awaiter(this, void 0, void 0, function* () {
         try {
-            core.info(new Date().toTimeString());
+            lib_core.info(new Date().toTimeString());
             // Grype accepts several input options, initially this action is supporting both `image` and `path`, so
             // a check must happen to ensure one is selected at least, and then return it
             const sourceArray = sourceInput();
-            const failBuild = core.getInput('fail-build') || 'true';
-            const outputFormat = core.getInput('output-format') || 'json';
-            const severityCutoff = core.getInput('severity-cutoff') || 'medium';
-            const onlyFixed = core.getInput('only-fixed') || 'false';
-            const headers = core.getInput('headers') ||
+            const failBuild = lib_core.getInput('fail-build') || 'true';
+            const outputFormat = lib_core.getInput('output-format') || 'json';
+            const severityCutoff = lib_core.getInput('severity-cutoff') || 'medium';
+            const onlyFixed = lib_core.getInput('only-fixed') || 'false';
+            const headers = lib_core.getInput('headers') ||
                 'CVE,Package Name,Package Version,Ecosystem,Location,Source,Severity,CVSS,Description,Fix Versions,Best Fix';
             const addCpesIfNone = 'true';
             const byCve = 'true';
             const vex = '';
-            const createPRComment = core.getInput('create-pr-comment') === 'true';
-            core.info(`createPRComment input value: ${core.getInput('create-pr-comment')}`);
-            core.info(`createPRComment parsed value: ${createPRComment}`);
+            const createPRComment = lib_core.getInput('create-pr-comment') === 'true';
+            lib_core.info(`createPRComment input value: ${lib_core.getInput('create-pr-comment')}`);
+            lib_core.info(`createPRComment parsed value: ${createPRComment}`);
             const out = yield runScan({
                 source: sourceArray.head,
                 failBuild: 'false',
@@ -35171,61 +35172,61 @@ function run() {
                 // core.setOutput("json", out.json);
                 if (out.json && outbase.json) {
                     const results = getResultsDiff(out.json, outbase.json);
-                    core.notice(`${results.length} Vulnerabilities found`);
+                    lib_core.notice(`${results.length} Vulnerabilities found`);
                     if (results.length > 0) {
                         const { markdown, json } = mapToReport(results, headers);
-                        core.setOutput('json', json);
-                        core.setOutput('markdown', markdown);
-                        core.info(`Generated vulnerability report`);
-                        core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`);
+                        lib_core.setOutput('json', json);
+                        lib_core.setOutput('markdown', markdown);
+                        lib_core.info(`Generated vulnerability report`);
+                        lib_core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`);
                         if (createPRComment && results.length > 0) {
-                            core.info('Creating/updating PR comment with vulnerability report');
+                            lib_core.info('Creating/updating PR comment with vulnerability report');
                             yield createOrUpdatePRComment(markdown);
                         }
                     }
                     else {
-                        core.setOutput('json', []);
-                        core.setOutput('markdown', '');
+                        lib_core.setOutput('json', []);
+                        lib_core.setOutput('markdown', '');
                     }
                     if (failBuild === 'true' && results.length > 0) {
-                        core.setFailed(`${results.length} Vulnerabilities found`);
+                        lib_core.setFailed(`${results.length} Vulnerabilities found`);
                     }
                     else {
                         if (results.length === 0) {
-                            core.notice(`No Vulnerabilities found`);
+                            lib_core.notice(`No Vulnerabilities found`);
                         }
                         else {
-                            core.warning(`${results.length} Vulnerabilities found`);
+                            lib_core.warning(`${results.length} Vulnerabilities found`);
                         }
                     }
                 }
             }
             else {
                 const results = out.json;
-                core.info(`Scan results: ${JSON.stringify(results)}`);
-                core.info(`Results type: ${typeof results}, is array: ${Array.isArray(results)}`);
-                core.info(`Results length: ${results === null || results === void 0 ? void 0 : results.length}`);
+                lib_core.info(`Scan results: ${JSON.stringify(results)}`);
+                lib_core.info(`Results type: ${typeof results}, is array: ${Array.isArray(results)}`);
+                lib_core.info(`Results length: ${results === null || results === void 0 ? void 0 : results.length}`);
                 if (results) {
-                    core.info(`${results === null || results === void 0 ? void 0 : results.length} Vulnerabilities found`);
+                    lib_core.info(`${results === null || results === void 0 ? void 0 : results.length} Vulnerabilities found`);
                     if ((results === null || results === void 0 ? void 0 : results.length) > 0) {
                         const { markdown, json } = mapToReport(results, headers);
-                        core.setOutput('json', json);
-                        core.setOutput('markdown', markdown);
-                        core.info(`Generated vulnerability report`);
-                        core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results === null || results === void 0 ? void 0 : results.length}`);
+                        lib_core.setOutput('json', json);
+                        lib_core.setOutput('markdown', markdown);
+                        lib_core.info(`Generated vulnerability report`);
+                        lib_core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results === null || results === void 0 ? void 0 : results.length}`);
                         if (createPRComment && (results === null || results === void 0 ? void 0 : results.length) > 0) {
-                            core.info('Creating/updating PR comment with vulnerability report');
+                            lib_core.info('Creating/updating PR comment with vulnerability report');
                             yield createOrUpdatePRComment(markdown);
                         }
                     }
                 }
                 if (failBuild === 'true' && results && (results === null || results === void 0 ? void 0 : results.length) > 0) {
-                    core.setFailed(`${results.length} Vulnerabilities found`);
+                    lib_core.setFailed(`${results.length} Vulnerabilities found`);
                 }
             }
         }
         catch (error) {
-            core.setFailed(`Action failed ${error}`);
+            lib_core.setFailed(`Action failed ${error}`);
         }
     });
 }
