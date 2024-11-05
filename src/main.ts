@@ -23,6 +23,9 @@ export async function run(): Promise<void> {
     const vex = ''
     const createPRComment = core.getInput('create-pr-comment') === 'true'
 
+    core.debug(`createPRComment input value: ${core.getInput('create-pr-comment')}`)
+    core.debug(`createPRComment parsed value: ${createPRComment}`)
+
     const out = await runScan({
       source: sourceArray.head,
       failBuild: 'false',
@@ -55,7 +58,9 @@ export async function run(): Promise<void> {
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
           core.info(`output : ${reportTable}`)
+          core.debug(`Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`)
           if (createPRComment && results.length > 0) {
+            core.debug('Attempting to create/update PR comment for diff results')
             await createOrUpdatePRComment(reportTable)
           }
         } else {
@@ -83,7 +88,9 @@ export async function run(): Promise<void> {
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
           core.info(`output : ${reportTable}`)
+          core.debug(`Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results?.length}`)
           if (createPRComment && results?.length > 0) {
+            core.debug('Attempting to create/update PR comment for single scan results')
             await createOrUpdatePRComment(reportTable)
           }
         }

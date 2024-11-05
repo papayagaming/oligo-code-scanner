@@ -46,7 +46,7 @@ inputs:
   create-pr-comment:
     description: 'Whether to create/update a sticky PR comment with the vulnerability report'
     required: false
-    default: 'false'
+    default: 'true'
  
 outputs:
   sarif:
