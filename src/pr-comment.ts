@@ -15,14 +15,16 @@ export async function createOrUpdatePRComment(markdown: string): Promise<void> {
 
     const octokit = github.getOctokit(token)
     const context = github.context
-    
-    core.info(`GitHub context: ${JSON.stringify({
-      eventName: context.eventName,
-      payload: {
-        pull_request: context.payload.pull_request ? 'exists' : 'undefined',
-        issue: context.payload.issue ? 'exists' : 'undefined'
-      }
-    })}`)
+
+    core.info(
+      `GitHub context: ${JSON.stringify({
+        eventName: context.eventName,
+        payload: {
+          pull_request: context.payload.pull_request ? 'exists' : 'undefined',
+          issue: context.payload.issue ? 'exists' : 'undefined'
+        }
+      })}`
+    )
 
     if (!context.payload.pull_request) {
       core.info('No pull request context found - skipping comment creation')
@@ -31,8 +33,10 @@ export async function createOrUpdatePRComment(markdown: string): Promise<void> {
 
     const { owner, repo } = context.repo
     const issue_number = context.payload.pull_request.number
-    
-    core.info(`PR details: owner=${owner}, repo=${repo}, issue_number=${issue_number}`)
+
+    core.info(
+      `PR details: owner=${owner}, repo=${repo}, issue_number=${issue_number}`
+    )
 
     // Search for existing comment
     core.info('Searching for existing comment')
@@ -42,8 +46,8 @@ export async function createOrUpdatePRComment(markdown: string): Promise<void> {
       issue_number
     })
 
-    const existingComment = comments.data.find((comment:any) => 
-      comment.body?.includes(COMMENT_MARKER)
+    const existingComment = comments.data.find(
+      (comment: any) => comment.body?.includes(COMMENT_MARKER)
     )
     core.info(`Existing comment found: ${existingComment ? 'yes' : 'no'}`)
 

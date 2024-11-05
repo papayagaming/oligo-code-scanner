@@ -17,13 +17,17 @@ export async function run(): Promise<void> {
     const outputFormat = core.getInput('output-format') || 'json'
     const severityCutoff = core.getInput('severity-cutoff') || 'medium'
     const onlyFixed = core.getInput('only-fixed') || 'false'
-    const headers = core.getInput('headers') || 'CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions'
+    const headers =
+      core.getInput('headers') ||
+      'CVE,Package Name,Package Version,Ecosystem,Source,Severity,CVSS,Description,Related Vulnerabilities,Fix Versions'
     const addCpesIfNone = 'true'
     const byCve = 'true'
     const vex = ''
     const createPRComment = core.getInput('create-pr-comment') === 'true'
 
-    core.info(`createPRComment input value: ${core.getInput('create-pr-comment')}`)
+    core.info(
+      `createPRComment input value: ${core.getInput('create-pr-comment')}`
+    )
     core.info(`createPRComment parsed value: ${createPRComment}`)
 
     const out = await runScan({
@@ -58,7 +62,9 @@ export async function run(): Promise<void> {
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
           core.info(`output : ${reportTable}`)
-          core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`)
+          core.info(
+            `Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`
+          )
           if (createPRComment && results.length > 0) {
             core.info('Attempting to create/update PR comment for diff results')
             await createOrUpdatePRComment(reportTable)
@@ -80,7 +86,9 @@ export async function run(): Promise<void> {
     } else {
       const results = out.json
       core.info(`Scan results: ${JSON.stringify(results)}`)
-      core.info(`Results type: ${typeof results}, is array: ${Array.isArray(results)}`)
+      core.info(
+        `Results type: ${typeof results}, is array: ${Array.isArray(results)}`
+      )
       core.info(`Results length: ${results?.length}`)
 
       if (results) {
@@ -91,9 +99,13 @@ export async function run(): Promise<void> {
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
           core.info(`output : ${reportTable}`)
-          core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results?.length}`)
+          core.info(
+            `Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results?.length}`
+          )
           if (createPRComment && results?.length > 0) {
-            core.info('Attempting to create/update PR comment for single scan results')
+            core.info(
+              'Attempting to create/update PR comment for single scan results'
+            )
             await createOrUpdatePRComment(reportTable)
           }
         }

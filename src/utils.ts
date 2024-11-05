@@ -67,23 +67,27 @@ export function mapToReport(
 ): { [key: string]: string | undefined }[] {
   const headerList = headers.split(',').map(h => h.trim())
   const allFields = {
-    'CVE': (r: IGrypeFinding) => r.vulnerability.id,
+    CVE: (r: IGrypeFinding) => r.vulnerability.id,
     'Package Name': (r: IGrypeFinding) => r.artifact.name,
     'Package Version': (r: IGrypeFinding) => r.artifact.version,
-    'Ecosystem': (r: IGrypeFinding) => r.artifact.type,
-    'Source': (r: IGrypeFinding) => r.vulnerability.dataSource,
-    'Severity': (r: IGrypeFinding) => r.vulnerability.severity,
-    'CVSS': (r: IGrypeFinding) => r.vulnerability.cvss?.map(cvss => cvss.metrics?.baseScore).join(','),
-    'Description': (r: IGrypeFinding) => r.vulnerability.description,
-    'Related Vulnerabilities': (r: IGrypeFinding) => r.relatedVulnerabilities.map(vuln => vuln.id).join(','),
-    'Fix Versions': (r: IGrypeFinding) => r.vulnerability.fix?.versions.join(',')
+    Ecosystem: (r: IGrypeFinding) => r.artifact.type,
+    Source: (r: IGrypeFinding) => r.vulnerability.dataSource,
+    Severity: (r: IGrypeFinding) => r.vulnerability.severity,
+    CVSS: (r: IGrypeFinding) =>
+      r.vulnerability.cvss?.map(cvss => cvss.metrics?.baseScore).join(','),
+    Description: (r: IGrypeFinding) => r.vulnerability.description,
+    'Related Vulnerabilities': (r: IGrypeFinding) =>
+      r.relatedVulnerabilities.map(vuln => vuln.id).join(','),
+    'Fix Versions': (r: IGrypeFinding) =>
+      r.vulnerability.fix?.versions.join(',')
   }
 
   return results.map(result => {
     const reportEntry: { [key: string]: string | undefined } = {}
     headerList.forEach(header => {
       if (header in allFields) {
-        reportEntry[header] = allFields[header as keyof typeof allFields](result)
+        reportEntry[header] =
+          allFields[header as keyof typeof allFields](result)
       }
     })
     return reportEntry
