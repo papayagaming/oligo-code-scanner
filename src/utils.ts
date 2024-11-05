@@ -92,7 +92,7 @@ export function mapToReport(
 async function downloadGrype(version = grypeVersion): Promise<string> {
   const url = `https://raw.githubusercontent.com/anchore/grype/main/install.sh`
 
-  core.debug(`Installing ${version}`)
+  core.info(`Installing ${version}`)
 
   // TODO: when grype starts supporting unreleased versions, support it here
   // Download the installer, and run
@@ -235,18 +235,18 @@ export async function runScan({
       `Invalid output-format value is set to ${outputFormat} - please ensure you are choosing either json or sarif`
     )
   }
-  core.debug(`Installing grype version ${grypeVersion}`)
+  core.info(`Installing grype version ${grypeVersion}`)
   await installGrype(grypeVersion)
 
-  core.debug(`Source: ${source}`)
-  core.debug(`Fail Build: ${failBuild}`)
-  core.debug(`Severity Cutoff: ${severityCutoff}`)
-  core.debug(`Only Fixed: ${onlyFixed}`)
-  core.debug(`Add Missing CPEs: ${addCpesIfNone}`)
-  core.debug(`Orient by CVE: ${byCve}`)
-  core.debug(`Output Format: ${outputFormat}`)
+  core.info(`Source: ${source}`)
+  core.info(`Fail Build: ${failBuild}`)
+  core.info(`Severity Cutoff: ${severityCutoff}`)
+  core.info(`Only Fixed: ${onlyFixed}`)
+  core.info(`Add Missing CPEs: ${addCpesIfNone}`)
+  core.info(`Orient by CVE: ${byCve}`)
+  core.info(`Output Format: ${outputFormat}`)
 
-  core.debug('Creating options for GRYPE analyzer')
+  core.info('Creating options for GRYPE analyzer')
 
   // Run the grype analyzer
   let cmdOutput = ''
@@ -294,15 +294,15 @@ export async function runScan({
           core.info(buffer.toString())
         },
         debug(message: string) {
-          core.debug(message)
+          core.info(message)
         }
       }
     })
   })
 
   if (core.isDebug()) {
-    core.debug('Grype output:')
-    core.debug(cmdOutput)
+    core.info('Grype output:')
+    core.info(cmdOutput)
   }
 
   switch (outputFormat) {
@@ -316,13 +316,13 @@ export async function runScan({
       // const REPORT_FILE = "./results.json";
       // fs.writeFileSync(REPORT_FILE, );
       try {
-        core.debug(`Parsing command output: ${cmdOutput}`)
+        core.info(`Parsing command output: ${cmdOutput}`)
         const parsed = JSON.parse(cmdOutput)
-        core.debug(`Parsed JSON structure: ${JSON.stringify(parsed)}`)
+        core.info(`Parsed JSON structure: ${JSON.stringify(parsed)}`)
         out.json = parsed.matches
-        core.debug(`Extracted matches: ${out.json?.length ?? 'undefined'} items`)
+        core.info(`Extracted matches: ${out.json?.length ?? 'undefined'} items`)
       } catch (error) {
-        core.debug(`Error parsing JSON output: ${error}`)
+        core.info(`Error parsing JSON output: ${error}`)
         out.json = []
       }
       break

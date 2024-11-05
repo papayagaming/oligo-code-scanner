@@ -8,7 +8,7 @@ import { createOrUpdatePRComment } from './pr-comment'
  */
 export async function run(): Promise<void> {
   try {
-    core.debug(new Date().toTimeString())
+    core.info(new Date().toTimeString())
     // Grype accepts several input options, initially this action is supporting both `image` and `path`, so
     // a check must happen to ensure one is selected at least, and then return it
     const sourceArray = sourceInput()
@@ -23,8 +23,8 @@ export async function run(): Promise<void> {
     const vex = ''
     const createPRComment = core.getInput('create-pr-comment') === 'true'
 
-    core.debug(`createPRComment input value: ${core.getInput('create-pr-comment')}`)
-    core.debug(`createPRComment parsed value: ${createPRComment}`)
+    core.info(`createPRComment input value: ${core.getInput('create-pr-comment')}`)
+    core.info(`createPRComment parsed value: ${createPRComment}`)
 
     const out = await runScan({
       source: sourceArray.head,
@@ -58,9 +58,9 @@ export async function run(): Promise<void> {
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
           core.info(`output : ${reportTable}`)
-          core.debug(`Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`)
+          core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results.length=${results.length}`)
           if (createPRComment && results.length > 0) {
-            core.debug('Attempting to create/update PR comment for diff results')
+            core.info('Attempting to create/update PR comment for diff results')
             await createOrUpdatePRComment(reportTable)
           }
         } else {
@@ -79,9 +79,9 @@ export async function run(): Promise<void> {
       }
     } else {
       const results = out.json
-      core.debug(`Scan results: ${JSON.stringify(results)}`)
-      core.debug(`Results type: ${typeof results}, is array: ${Array.isArray(results)}`)
-      core.debug(`Results length: ${results?.length}`)
+      core.info(`Scan results: ${JSON.stringify(results)}`)
+      core.info(`Results type: ${typeof results}, is array: ${Array.isArray(results)}`)
+      core.info(`Results length: ${results?.length}`)
 
       if (results) {
         core.info(`${results?.length} Vulnerabilities found`)
@@ -91,9 +91,9 @@ export async function run(): Promise<void> {
           const reportTable = tablemark(report)
           core.setOutput('markdown', reportTable)
           core.info(`output : ${reportTable}`)
-          core.debug(`Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results?.length}`)
+          core.info(`Checking PR comment conditions: createPRComment=${createPRComment}, results?.length=${results?.length}`)
           if (createPRComment && results?.length > 0) {
-            core.debug('Attempting to create/update PR comment for single scan results')
+            core.info('Attempting to create/update PR comment for single scan results')
             await createOrUpdatePRComment(reportTable)
           }
         }
