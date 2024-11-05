@@ -32243,21 +32243,6 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 875:
-/***/ ((module) => {
-
-function webpackEmptyContext(req) {
-	var e = new Error("Cannot find module '" + req + "'");
-	e.code = 'MODULE_NOT_FOUND';
-	throw e;
-}
-webpackEmptyContext.keys = () => ([]);
-webpackEmptyContext.resolve = webpackEmptyContext;
-webpackEmptyContext.id = 875;
-module.exports = webpackEmptyContext;
-
-/***/ }),
-
 /***/ 9491:
 /***/ ((module) => {
 
@@ -34210,6 +34195,8 @@ var exec = __nccwpck_require__(1514);
 var tool_cache = __nccwpck_require__(7784);
 // EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
 var github = __nccwpck_require__(5438);
+// EXTERNAL MODULE: external "fs"
+var external_fs_ = __nccwpck_require__(7147);
 // EXTERNAL MODULE: external "stream"
 var external_stream_ = __nccwpck_require__(2781);
 var external_stream_default = /*#__PURE__*/__nccwpck_require__.n(external_stream_);
@@ -34223,6 +34210,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+
 
 
 
@@ -34263,33 +34251,41 @@ function findBestFixVersion(versions) {
 }
 function groupVulnerabilities(findings) {
     const groupedMap = new Map();
-    const dependencyTree = new Map();
-    // First pass: build dependency tree and collect all packages
     findings.forEach(finding => {
-        var _a, _b, _c, _d, _e;
+        var _a, _b, _c;
         const key = finding.artifact.name;
         const location = ((_a = finding.artifact.locations[0]) === null || _a === void 0 ? void 0 : _a.path) || 'unknown';
-        // Parse package.json to find parent package
+        // Find the root dependency declaration based on ecosystem
         let parentPackage;
-        if (location.includes('node_modules')) {
-            const parts = location.split('node_modules/');
-            const possibleParent = parts[0].match(/package\.json$/);
-            if (possibleParent) {
-                try {
-                    const packageJson = __nccwpck_require__(875)(parts[0]);
-                    if (((_b = packageJson.dependencies) === null || _b === void 0 ? void 0 : _b[key]) ||
-                        ((_c = packageJson.devDependencies) === null || _c === void 0 ? void 0 : _c[key])) {
-                        parentPackage = {
-                            name: packageJson.name,
-                            version: packageJson.version,
-                            location: parts[0]
-                        };
-                    }
-                }
-                catch (error) {
-                    // Ignore package.json parsing errors
-                }
+        try {
+            switch (finding.artifact.type.toLowerCase()) {
+                case 'npm':
+                    parentPackage = findNpmParent(key, location);
+                    break;
+                case 'python':
+                    parentPackage = findPythonParent(key, location);
+                    break;
+                case 'maven':
+                    parentPackage = findMavenParent(key, location);
+                    break;
+                case 'gradle':
+                    parentPackage = findGradleParent(key, location);
+                    break;
+                case 'cargo':
+                    parentPackage = findCargoParent(key, location);
+                    break;
+                case 'gem':
+                    parentPackage = findGemParent(key, location);
+                    break;
+                case 'go':
+                    parentPackage = findGoParent(key, location);
+                    break;
+                default:
+                    parentPackage = findGenericParent(key, location);
             }
+        }
+        catch (error) {
+            core.debug(`Error finding parent package: ${error}`);
         }
         if (!groupedMap.has(key)) {
             groupedMap.set(key, {
@@ -34299,7 +34295,7 @@ function groupVulnerabilities(findings) {
                 cves: [],
                 severity: [],
                 ecosystem: finding.artifact.type,
-                location,
+                location: (parentPackage === null || parentPackage === void 0 ? void 0 : parentPackage.location) || location,
                 sources: [],
                 cvssScores: [],
                 descriptions: [],
@@ -34312,11 +34308,11 @@ function groupVulnerabilities(findings) {
             group.severity.push(finding.vulnerability.severity);
             group.sources.push(finding.vulnerability.dataSource);
             group.descriptions.push(finding.vulnerability.description);
-            const cvssScore = (_d = finding.vulnerability.cvss) === null || _d === void 0 ? void 0 : _d.map(cvss => { var _a; return (_a = cvss.metrics) === null || _a === void 0 ? void 0 : _a.baseScore.toString(); }).filter(score => score).join(',');
+            const cvssScore = (_b = finding.vulnerability.cvss) === null || _b === void 0 ? void 0 : _b.map(cvss => { var _a; return (_a = cvss.metrics) === null || _a === void 0 ? void 0 : _a.baseScore.toString(); }).filter(score => score).join(',');
             if (cvssScore) {
                 group.cvssScores.push(cvssScore);
             }
-            if ((_e = finding.vulnerability.fix) === null || _e === void 0 ? void 0 : _e.versions.length) {
+            if ((_c = finding.vulnerability.fix) === null || _c === void 0 ? void 0 : _c.versions.length) {
                 group.fixVersions.push(...finding.vulnerability.fix.versions);
             }
         }
@@ -34326,6 +34322,37 @@ function groupVulnerabilities(findings) {
         group.bestFixVersion = findBestFixVersion(group.fixVersions);
     }
     return Array.from(groupedMap.values());
+}
+// Helper functions for finding parent packages in different ecosystems
+function findNpmParent(packageName, location) {
+    return findParentPackage(packageName, location, 'npm');
+}
+function findPythonParent(packageName, location) {
+    return findParentPackage(packageName, location, 'python');
+}
+function findMavenParent(packageName, location) {
+    return findParentPackage(packageName, location, 'maven');
+}
+function findGradleParent(packageName, location) {
+    return findParentPackage(packageName, location, 'gradle');
+}
+function findCargoParent(packageName, location) {
+    return findParentPackage(packageName, location, 'cargo');
+}
+function findGemParent(packageName, location) {
+    return findParentPackage(packageName, location, 'gem');
+}
+function findGoParent(packageName, location) {
+    return findParentPackage(packageName, location, 'go');
+}
+function findGenericParent(packageName, location) {
+    // Try each package manager in turn
+    for (const type of Object.keys(packageManagers)) {
+        const result = findParentPackage(packageName, location, type);
+        if (result)
+            return result;
+    }
+    return undefined;
 }
 function mapToReport(results, headers) {
     const groupedResults = groupVulnerabilities(results);
@@ -34756,7 +34783,7 @@ function generateVulnerabilityReport(groupedResults) {
     return `# 🔒 Security Vulnerability Report
 
 <details>
-<summary><strong>📊 Vulnerability Details</strong></summary>
+<summary><strong> Vulnerability Details</strong></summary>
 
 ${sections.join('\n')}
 
@@ -34825,6 +34852,102 @@ function getRelativeFileLink(location) {
         return location;
     // Create a link to the file in the PR
     return `https://github.com/${owner}/${repo}/blob/${context.sha}/${location}`;
+}
+const packageManagers = {
+    npm: {
+        getRootPackageFile: (location) => {
+            const parts = location.split('node_modules/');
+            return `${parts[0]}package.json`;
+        },
+        parsePackageFile: (content) => JSON.parse(content),
+        findDependencyInTree: (packageName, tree) => {
+            var _a, _b;
+            const version = ((_a = tree.dependencies) === null || _a === void 0 ? void 0 : _a[packageName]) || ((_b = tree.devDependencies) === null || _b === void 0 ? void 0 : _b[packageName]);
+            if (version) {
+                return {
+                    name: packageName,
+                    version: version,
+                    location: 'package.json'
+                };
+            }
+            return undefined;
+        }
+    },
+    python: {
+        getRootPackageFile: (location) => {
+            const rootDir = location.split('site-packages/')[0] ||
+                location.split('dist-packages/')[0];
+            const possibleFiles = ['requirements.txt', 'setup.py', 'pyproject.toml'];
+            for (const file of possibleFiles) {
+                const fullPath = `${rootDir}/${file}`;
+                if (external_fs_.existsSync(fullPath))
+                    return fullPath;
+            }
+            return `${rootDir}/requirements.txt`;
+        },
+        parsePackageFile: (content) => {
+            const deps = {};
+            content.split('\n').forEach(line => {
+                const match = line.match(/^([^=><\s]+)\s*(==|>=|<=|~=|!=|>|<)?\s*([^#\s]+)?/);
+                if (match) {
+                    deps[match[1]] = match[3] || '*';
+                }
+            });
+            return { name: '', version: '', dependencies: deps };
+        },
+        findDependencyInTree: (packageName, tree) => {
+            var _a;
+            if ((_a = tree.dependencies) === null || _a === void 0 ? void 0 : _a[packageName]) {
+                return {
+                    name: packageName,
+                    version: tree.dependencies[packageName],
+                    location: 'requirements.txt'
+                };
+            }
+            return undefined;
+        }
+    },
+    maven: {
+        getRootPackageFile: (location) => {
+            const rootDir = location.split('repository/')[0];
+            return `${rootDir}/pom.xml`;
+        },
+        parsePackageFile: (content) => {
+            // Simple XML parsing - in practice you'd want to use a proper XML parser
+            const deps = {};
+            const matches = content.matchAll(/<dependency>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>[\s\S]*?<\/dependency>/g);
+            for (const match of matches) {
+                deps[match[1]] = match[2];
+            }
+            return { name: '', version: '', dependencies: deps };
+        },
+        findDependencyInTree: (packageName, tree) => {
+            var _a;
+            if ((_a = tree.dependencies) === null || _a === void 0 ? void 0 : _a[packageName]) {
+                return {
+                    name: packageName,
+                    version: tree.dependencies[packageName],
+                    location: 'pom.xml'
+                };
+            }
+            return undefined;
+        }
+    }
+};
+function findParentPackage(packageName, location, type) {
+    const helper = packageManagers[type.toLowerCase()];
+    if (!helper)
+        return undefined;
+    try {
+        const rootPackageFile = helper.getRootPackageFile(location);
+        const content = external_fs_.readFileSync(rootPackageFile, 'utf8');
+        const packageInfo = helper.parsePackageFile(content);
+        return helper.findDependencyInTree(packageName, packageInfo);
+    }
+    catch (error) {
+        core.debug(`Error finding parent package: ${error}`);
+        return undefined;
+    }
 }
 
 ;// CONCATENATED MODULE: ./src/pr-comment.ts

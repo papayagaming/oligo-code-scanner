@@ -70,6 +70,7 @@
     "@actions/exec": "^1.1.1",
     "@actions/github": "^6.0.0",
     "@actions/tool-cache": "^2.0.1",
+    "fs": "^0.0.1-security",
     "lodash": "^4.17.21",
     "tablemark": "^3.0.0"
   },

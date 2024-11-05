@@ -2,6 +2,7 @@ import * as core from '@actions/core'
 import * as exec from '@actions/exec'
 import * as cache from '@actions/tool-cache'
 import * as github from '@actions/github'
+import * as fs from 'fs'
 
 import stream from 'stream'
 const GRYPE_VERSION = 'v0.79.1'
@@ -109,37 +110,44 @@ function groupVulnerabilities(
   findings: IGrypeFinding[]
 ): GroupedVulnerability[] {
   const groupedMap = new Map<string, GroupedVulnerability>()
-  const dependencyTree = new Map<string, Set<string>>()
 
-  // First pass: build dependency tree and collect all packages
   findings.forEach(finding => {
     const key = finding.artifact.name
     const location = finding.artifact.locations[0]?.path || 'unknown'
 
-    // Parse package.json to find parent package
+    // Find the root dependency declaration based on ecosystem
     let parentPackage:
       | { name: string; version: string; location: string }
       | undefined
-    if (location.includes('node_modules')) {
-      const parts = location.split('node_modules/')
-      const possibleParent = parts[0].match(/package\.json$/)
-      if (possibleParent) {
-        try {
-          const packageJson = require(parts[0])
-          if (
-            packageJson.dependencies?.[key] ||
-            packageJson.devDependencies?.[key]
-          ) {
-            parentPackage = {
-              name: packageJson.name,
-              version: packageJson.version,
-              location: parts[0]
-            }
-          }
-        } catch (error) {
-          // Ignore package.json parsing errors
-        }
+
+    try {
+      switch (finding.artifact.type.toLowerCase()) {
+        case 'npm':
+          parentPackage = findNpmParent(key, location)
+          break
+        case 'python':
+          parentPackage = findPythonParent(key, location)
+          break
+        case 'maven':
+          parentPackage = findMavenParent(key, location)
+          break
+        case 'gradle':
+          parentPackage = findGradleParent(key, location)
+          break
+        case 'cargo':
+          parentPackage = findCargoParent(key, location)
+          break
+        case 'gem':
+          parentPackage = findGemParent(key, location)
+          break
+        case 'go':
+          parentPackage = findGoParent(key, location)
+          break
+        default:
+          parentPackage = findGenericParent(key, location)
       }
+    } catch (error) {
+      core.debug(`Error finding parent package: ${error}`)
     }
 
     if (!groupedMap.has(key)) {
@@ -150,7 +158,7 @@ function groupVulnerabilities(
         cves: [],
         severity: [],
         ecosystem: finding.artifact.type,
-        location,
+        location: parentPackage?.location || location,
         sources: [],
         cvssScores: [],
         descriptions: [],
@@ -185,6 +193,44 @@ function groupVulnerabilities(
   }
 
   return Array.from(groupedMap.values())
+}
+
+// Helper functions for finding parent packages in different ecosystems
+function findNpmParent(packageName: string, location: string) {
+  return findParentPackage(packageName, location, 'npm')
+}
+
+function findPythonParent(packageName: string, location: string) {
+  return findParentPackage(packageName, location, 'python')
+}
+
+function findMavenParent(packageName: string, location: string) {
+  return findParentPackage(packageName, location, 'maven')
+}
+
+function findGradleParent(packageName: string, location: string) {
+  return findParentPackage(packageName, location, 'gradle')
+}
+
+function findCargoParent(packageName: string, location: string) {
+  return findParentPackage(packageName, location, 'cargo')
+}
+
+function findGemParent(packageName: string, location: string) {
+  return findParentPackage(packageName, location, 'gem')
+}
+
+function findGoParent(packageName: string, location: string) {
+  return findParentPackage(packageName, location, 'go')
+}
+
+function findGenericParent(packageName: string, location: string) {
+  // Try each package manager in turn
+  for (const type of Object.keys(packageManagers)) {
+    const result = findParentPackage(packageName, location, type)
+    if (result) return result
+  }
+  return undefined
 }
 
 export function mapToReport(
@@ -759,7 +805,7 @@ function generateVulnerabilityReport(
   return `# 🔒 Security Vulnerability Report
 
 <details>
-<summary><strong>📊 Vulnerability Details</strong></summary>
+<summary><strong> Vulnerability Details</strong></summary>
 
 ${sections.join('\n')}
 
@@ -838,4 +884,129 @@ function getRelativeFileLink(location: string): string {
 
   // Create a link to the file in the PR
   return `https://github.com/${owner}/${repo}/blob/${context.sha}/${location}`
+}
+
+interface DependencyInfo {
+  name: string
+  version: string
+  dependencies?: { [key: string]: string }
+  devDependencies?: { [key: string]: string }
+}
+
+interface PackageManagerHelper {
+  getRootPackageFile: (location: string) => string
+  parsePackageFile: (content: string) => DependencyInfo
+  findDependencyInTree: (
+    packageName: string,
+    tree: DependencyInfo
+  ) =>
+    | {
+        name: string
+        version: string
+        location: string
+      }
+    | undefined
+}
+
+const packageManagers: Record<string, PackageManagerHelper> = {
+  npm: {
+    getRootPackageFile: (location: string) => {
+      const parts = location.split('node_modules/')
+      return `${parts[0]}package.json`
+    },
+    parsePackageFile: (content: string) => JSON.parse(content),
+    findDependencyInTree: (packageName: string, tree: DependencyInfo) => {
+      const version =
+        tree.dependencies?.[packageName] || tree.devDependencies?.[packageName]
+      if (version) {
+        return {
+          name: packageName,
+          version: version,
+          location: 'package.json'
+        }
+      }
+      return undefined
+    }
+  },
+  python: {
+    getRootPackageFile: (location: string) => {
+      const rootDir =
+        location.split('site-packages/')[0] ||
+        location.split('dist-packages/')[0]
+      const possibleFiles = ['requirements.txt', 'setup.py', 'pyproject.toml']
+      for (const file of possibleFiles) {
+        const fullPath = `${rootDir}/${file}`
+        if (fs.existsSync(fullPath)) return fullPath
+      }
+      return `${rootDir}/requirements.txt`
+    },
+    parsePackageFile: (content: string) => {
+      const deps: { [key: string]: string } = {}
+      content.split('\n').forEach(line => {
+        const match = line.match(
+          /^([^=><\s]+)\s*(==|>=|<=|~=|!=|>|<)?\s*([^#\s]+)?/
+        )
+        if (match) {
+          deps[match[1]] = match[3] || '*'
+        }
+      })
+      return { name: '', version: '', dependencies: deps }
+    },
+    findDependencyInTree: (packageName: string, tree: DependencyInfo) => {
+      if (tree.dependencies?.[packageName]) {
+        return {
+          name: packageName,
+          version: tree.dependencies[packageName],
+          location: 'requirements.txt'
+        }
+      }
+      return undefined
+    }
+  },
+  maven: {
+    getRootPackageFile: (location: string) => {
+      const rootDir = location.split('repository/')[0]
+      return `${rootDir}/pom.xml`
+    },
+    parsePackageFile: (content: string) => {
+      // Simple XML parsing - in practice you'd want to use a proper XML parser
+      const deps: { [key: string]: string } = {}
+      const matches = content.matchAll(
+        /<dependency>[\s\S]*?<artifactId>(.*?)<\/artifactId>[\s\S]*?<version>(.*?)<\/version>[\s\S]*?<\/dependency>/g
+      )
+      for (const match of matches) {
+        deps[match[1]] = match[2]
+      }
+      return { name: '', version: '', dependencies: deps }
+    },
+    findDependencyInTree: (packageName: string, tree: DependencyInfo) => {
+      if (tree.dependencies?.[packageName]) {
+        return {
+          name: packageName,
+          version: tree.dependencies[packageName],
+          location: 'pom.xml'
+        }
+      }
+      return undefined
+    }
+  }
+}
+
+function findParentPackage(
+  packageName: string,
+  location: string,
+  type: string
+): { name: string; version: string; location: string } | undefined {
+  const helper = packageManagers[type.toLowerCase()]
+  if (!helper) return undefined
+
+  try {
+    const rootPackageFile = helper.getRootPackageFile(location)
+    const content = fs.readFileSync(rootPackageFile, 'utf8')
+    const packageInfo = helper.parsePackageFile(content)
+    return helper.findDependencyInTree(packageName, packageInfo)
+  } catch (error) {
+    core.debug(`Error finding parent package: ${error}`)
+    return undefined
+  }
 }
