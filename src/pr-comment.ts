@@ -58,7 +58,7 @@ The following vulnerabilities were found in your dependencies:
 
 ${markdown}
 
-Note: "Best Fix" column shows the recommended version to update to in order to fix all CVEs for each package.`
+`
 
     if (existingComment) {
       core.info(`Updating existing comment ID: ${existingComment.id}`)
