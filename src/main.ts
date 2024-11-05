@@ -19,7 +19,7 @@ export async function run(): Promise<void> {
     const onlyFixed = core.getInput('only-fixed') || 'false'
     const headers =
       core.getInput('headers') ||
-      'CVE,Package Name,Package Version,Ecosystem,Package Manager,Location,Source,Severity,CVSS,Description,Fix Versions,Best Fix'
+      'CVE,Package Name,Package Version,Ecosystem,Location,Source,Severity,CVSS,Description,Fix Versions,Best Fix'
     const addCpesIfNone = 'true'
     const byCve = 'true'
     const vex = ''

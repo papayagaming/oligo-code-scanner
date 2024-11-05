@@ -45,7 +45,6 @@ export interface IArtifact {
     path: string
     layerID?: string
   }[]
-  packageManager?: string
 }
 export function getResultsDiff(
   head: IGrypeFinding[],
@@ -72,7 +71,6 @@ interface GroupedVulnerability {
   cves: string[]
   severity: string[]
   ecosystem: string
-  packageManager: string
   location: string
   sources: string[]
   cvssScores: string[]
@@ -109,14 +107,6 @@ function groupVulnerabilities(
   findings.forEach(finding => {
     const key = finding.artifact.name
     const location = finding.artifact.locations[0]?.path || 'unknown'
-    let packageManager = finding.artifact.packageManager || 'unknown'
-
-    // Determine package manager from file path
-    if (location.includes('package.json')) packageManager = 'npm'
-    else if (location.includes('requirements.txt')) packageManager = 'pip'
-    else if (location.includes('Gemfile')) packageManager = 'bundler'
-    else if (location.includes('go.mod')) packageManager = 'go'
-    else if (location.includes('pom.xml')) packageManager = 'maven'
 
     if (!groupedMap.has(key)) {
       groupedMap.set(key, {
@@ -125,7 +115,6 @@ function groupVulnerabilities(
         cves: [],
         severity: [],
         ecosystem: finding.artifact.type,
-        packageManager,
         location,
         sources: [],
         cvssScores: [],
@@ -171,13 +160,17 @@ export function mapToReport(
   const headerList = headers.split(',').map(h => h.trim())
 
   const allFields = {
-    CVE: (r: GroupedVulnerability) => r.cves.join(', '),
-    'Package Name': (r: GroupedVulnerability) => r.packageName,
-    'Package Version': (r: GroupedVulnerability) => r.packageVersion,
+    CVE: (r: GroupedVulnerability) => {
+      const cves = r.cves.join(', ')
+      return `<details><summary>Click to view</summary><p>${cves}</p></details>`
+    },
+    Package: (r: GroupedVulnerability) => `${r.packageName}@${r.packageVersion}`,
     Ecosystem: (r: GroupedVulnerability) => r.ecosystem,
-    'Package Manager': (r: GroupedVulnerability) => r.packageManager,
     Location: (r: GroupedVulnerability) => r.location,
-    Source: (r: GroupedVulnerability) => r.sources.join(', '),
+    Source: (r: GroupedVulnerability) => {
+      const sources = Array.from(new Set(r.sources)).join(', ')
+      return `<details><summary>Click to view</summary><p>${sources}</p></details>`
+    },
     Severity: (r: GroupedVulnerability) =>
       Array.from(new Set(r.severity)).join(', '),
     CVSS: (r: GroupedVulnerability) =>
@@ -193,8 +186,11 @@ export function mapToReport(
       const versions = Array.from(new Set(r.fixVersions))
       return versions.length ? versions.join(', ') : undefined
     },
-    'Best Fix': (r: GroupedVulnerability) =>
-      r.bestFixVersion || 'No fix available'
+    'Best Fix': (r: GroupedVulnerability) => {
+      if (!r.bestFixVersion) return 'No fix available'
+      const diff = generateVersionDiff(r.packageVersion, r.bestFixVersion, r.location)
+      return `<details><summary>${r.bestFixVersion}</summary><p>${diff}</p></details>`
+    }
   }
 
   return groupedResults.map(result => {
@@ -470,4 +466,16 @@ export async function runScan({
   }
 
   return out
+}
+
+function generateVersionDiff(currentVersion: string, fixVersion: string, location: string): string {
+  const lines = [
+    '```diff',
+    `--- ${location}`,
+    `+++ ${location}`,
+    `-  "version": "${currentVersion}"`,
+    `+  "version": "${fixVersion}"`,
+    '```'
+  ]
+  return lines.join('\n')
 }
